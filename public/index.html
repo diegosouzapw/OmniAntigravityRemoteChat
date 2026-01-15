@@ -200,21 +200,6 @@
 </head>
 
 <body>
-    <!-- Header -->
-    <div class="header">
-        <h1>Antigravity Monitor</h1>
-        <div class="controls">
-            <div class="status-indicator" id="status"></div>
-            <button id="toggleAutoRefresh">Pause</button>
-            <button id="manualRefresh">↻</button>
-        </div>
-    </div>
-
-    <!-- Pause Banner -->
-    <div class="pause-banner" id="pauseBanner">
-        Auto-refresh paused • Tap to refresh
-    </div>
-
     <!-- Chat Container -->
     <div class="chat-container" id="chatContainer">
         <div class="chat-content" id="chatContent">
@@ -236,10 +221,6 @@
     <script>
         const chatContainer = document.getElementById('chatContainer');
         const chatContent = document.getElementById('chatContent');
-        const statusIndicator = document.getElementById('status');
-        const toggleBtn = document.getElementById('toggleAutoRefresh');
-        const refreshBtn = document.getElementById('manualRefresh');
-        const pauseBanner = document.getElementById('pauseBanner');
         const messageInput = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendBtn');
         const scrollToBottomBtn = document.getElementById('scrollToBottom');
@@ -257,7 +238,6 @@
 
             ws.onopen = () => {
                 console.log('WebSocket connected');
-                statusIndicator.classList.add('connected');
                 loadSnapshot();
             };
 
@@ -270,7 +250,6 @@
 
             ws.onclose = () => {
                 console.log('WebSocket disconnected');
-                statusIndicator.classList.remove('connected');
                 setTimeout(connectWebSocket, 2000);
             };
         }
@@ -386,27 +365,7 @@
             }
         }
 
-        // Toggle auto-refresh
-        toggleBtn.addEventListener('click', () => {
-            autoRefreshEnabled = !autoRefreshEnabled;
 
-            if (autoRefreshEnabled) {
-                toggleBtn.textContent = 'Pause';
-                pauseBanner.classList.remove('show');
-                statusIndicator.classList.remove('paused');
-                statusIndicator.classList.add('connected');
-            } else {
-                toggleBtn.textContent = 'Resume';
-                pauseBanner.classList.add('show');
-                statusIndicator.classList.remove('connected');
-                statusIndicator.classList.add('paused');
-            }
-        });
-
-        // Manual refresh
-        refreshBtn.addEventListener('click', () => {
-            loadSnapshot();
-        });
 
         // Detect user scrolling
         let scrollTimeout;
@@ -426,10 +385,6 @@
 
             idleTimer = setTimeout(() => {
                 autoRefreshEnabled = true;
-                toggleBtn.textContent = 'Pause';
-                pauseBanner.classList.remove('show');
-                statusIndicator.classList.remove('paused');
-                statusIndicator.classList.add('connected');
             }, 10000);
         });
 

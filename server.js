@@ -90,7 +90,17 @@ async function captureSnapshot(cdp) {
         if (!cascade) return { error: 'cascade not found' };
         
         const cascadeStyles = window.getComputedStyle(cascade);
-        const html = cascade.outerHTML;
+        
+        // Clone cascade to modify it without affecting the original
+        const clone = cascade.cloneNode(true);
+        
+        // Remove the input box / chat window (last direct child div containing contenteditable)
+        const inputContainer = clone.querySelector('[contenteditable="true"]')?.closest('div[id^="cascade"] > div');
+        if (inputContainer) {
+            inputContainer.remove();
+        }
+        
+        const html = clone.outerHTML;
         
         let allCSS = '';
         for (const sheet of document.styleSheets) {
@@ -158,7 +168,11 @@ async function injectMessage(cdp, text) {
             return { ok:true, method:"click_submit" };
         }
 
-        return { ok:false, reason:"submit_not_found" };
+        // Submit button not found, but text is inserted - trigger Enter key
+        editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles:true, key:"Enter", code:"Enter" }));
+        editor.dispatchEvent(new KeyboardEvent("keyup", { bubbles:true, key:"Enter", code:"Enter" }));
+        
+        return { ok:true, method:"enter_keypress" };
     })()`;
 
     for (const ctx of cdp.contexts) {
