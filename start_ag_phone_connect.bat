@@ -41,21 +41,14 @@ for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4 Address" /c:"IP
 echo [READY] Server will be available at:
 echo       http://!MYIP!:3000
 echo.
-
-:: Right-Click Context Menu (4 second timeout)
-echo [CONTEXT MENU] Add "Open with Antigravity (Debug)" to Right-Click?
-echo Press 'y' within 4 seconds to install, or wait to skip...
-choice /c yn /t 4 /d n /m "Install"
-if %errorlevel%==1 (
-    echo [INFO] Requesting Registry modification...
-    powershell -Command "Start-Process reg -ArgumentList 'add \"HKEY_CLASSES_ROOT\Directory\Background\shell\AntigravityDebug\" /t REG_SZ /v \"\" /d \"Open with Antigravity (Debug)\" /f' -Verb RunAs"
-    powershell -Command "Start-Process reg -ArgumentList 'add \"HKEY_CLASSES_ROOT\Directory\Background\shell\AntigravityDebug\command\" /t REG_SZ /v \"\" /d \"cmd /c antigravity . --remote-debugging-port=9000\" /f' -Verb RunAs"
-    powershell -Command "Start-Process reg -ArgumentList 'add \"HKEY_CLASSES_ROOT\Directory\shell\AntigravityDebug\" /t REG_SZ /v \"\" /d \"Open with Antigravity (Debug)\" /f' -Verb RunAs"
-    powershell -Command "Start-Process reg -ArgumentList 'add \"HKEY_CLASSES_ROOT\Directory\shell\AntigravityDebug\command\" /t REG_SZ /v \"\" /d \"cmd /c cd /d %%1 && antigravity . --remote-debugging-port=9000\" /f' -Verb RunAs"
-    echo [SUCCESS] Context menu added!
-)
+echo [TIP] To add Right-Click context menu, run: install_context_menu.bat
 echo.
 
 echo [STARTING] Launching monitor server...
+echo.
 node server.js
-pause
+
+:: Keep window open if server crashes
+echo.
+echo [INFO] Server stopped. Press any key to exit.
+pause >nul
