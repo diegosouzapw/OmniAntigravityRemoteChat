@@ -680,11 +680,13 @@
         // --- State ---
         let autoRefreshEnabled = true;
         let userIsScrolling = false;
+        let userScrollLockUntil = 0; // Timestamp until which we respect user scroll
         let lastScrollPosition = 0;
         let ws = null;
         let idleTimer = null;
         let lastHash = '';
         let currentMode = 'Fast';
+        const USER_SCROLL_LOCK_DURATION = 3000; // 3 seconds of scroll protection
 
         // --- Sync State (Desktop is Always Priority) ---
         async function fetchAppState() {
@@ -818,8 +820,12 @@
 
                 const data = await response.json();
 
+                // Capture scroll state BEFORE updating content
                 const scrollPos = chatContainer.scrollTop;
-                const isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 120;
+                const scrollHeight = chatContainer.scrollHeight;
+                const clientHeight = chatContainer.clientHeight;
+                const isNearBottom = scrollHeight - scrollPos - clientHeight < 120;
+                const isUserScrollLocked = Date.now() < userScrollLockUntil;
 
                 // --- UPDATE STATS ---
                 if (data.stats) {
@@ -872,6 +878,60 @@
                             border: 1px solid #334155;
                         }
                         
+                        /* Mobile Code Block Copy Button - Minimal Icon Style */
+                        pre {
+                            position: relative !important;
+                            display: flex !important;
+                            flex-wrap: wrap !important;
+                            align-items: flex-start !important;
+                        }
+                        
+                        pre > code {
+                            flex: 1 !important;
+                            min-width: 0 !important;
+                        }
+                        
+                        .mobile-copy-btn {
+                            background: transparent !important;
+                            color: #94a3b8 !important;
+                            border: none !important;
+                            padding: 4px !important;
+                            cursor: pointer !important;
+                            display: inline-flex !important;
+                            align-items: center !important;
+                            justify-content: center !important;
+                            transition: color 0.2s ease, transform 0.15s ease !important;
+                            -webkit-tap-highlight-color: transparent !important;
+                            touch-action: manipulation !important;
+                            flex-shrink: 0 !important;
+                            margin-left: 6px !important;
+                            opacity: 0.7 !important;
+                        }
+                        
+                        .mobile-copy-btn:hover,
+                        .mobile-copy-btn:focus {
+                            color: #60a5fa !important;
+                            opacity: 1 !important;
+                        }
+                        
+                        .mobile-copy-btn:active {
+                            transform: scale(0.9) !important;
+                            color: #3b82f6 !important;
+                        }
+                        
+                        .mobile-copy-btn.copied {
+                            color: #22c55e !important;
+                            opacity: 1 !important;
+                        }
+                        
+                        .mobile-copy-btn svg {
+                            width: 16px !important;
+                            height: 16px !important;
+                            stroke: currentColor !important;
+                            stroke-width: 2 !important;
+                            fill: none !important;
+                        }
+                        
                         blockquote {
                             border-left: 3px solid #3b82f6 !important;
                             background: rgba(59, 130, 246, 0.1) !important;
@@ -905,15 +965,164 @@
 
                 chatContent.innerHTML = darkModeOverrides + data.html;
 
-                if (isNearBottom || scrollPos === 0) {
+                // Add mobile copy buttons to all code blocks
+                addMobileCopyButtons();
+
+                // Smart scroll behavior: respect user scroll, only auto-scroll when appropriate
+                if (isUserScrollLocked) {
+                    // User recently scrolled - try to maintain their approximate position
+                    // Use percentage-based restoration for better accuracy
+                    const scrollPercent = scrollHeight > 0 ? scrollPos / scrollHeight : 0;
+                    const newScrollPos = chatContainer.scrollHeight * scrollPercent;
+                    chatContainer.scrollTop = newScrollPos;
+                } else if (isNearBottom || scrollPos === 0) {
+                    // User was at bottom or hasn't scrolled - auto scroll to bottom
                     scrollToBottom();
                 } else {
+                    // Preserve exact scroll position
                     chatContainer.scrollTop = scrollPos;
                 }
 
             } catch (err) {
                 console.error(err);
             }
+        }
+
+        // --- Mobile Code Block Copy Functionality ---
+        function addMobileCopyButtons() {
+            // Find all pre elements (code blocks) in the chat
+            const codeBlocks = chatContent.querySelectorAll('pre');
+
+            codeBlocks.forEach((pre, index) => {
+                // Skip if already has our button
+                if (pre.querySelector('.mobile-copy-btn')) return;
+
+                // Create the copy button (icon only)
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'mobile-copy-btn';
+                copyBtn.setAttribute('data-code-index', index);
+                copyBtn.setAttribute('aria-label', 'Copy code');
+                copyBtn.innerHTML = `
+                    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                `;
+
+                // Add click handler for copy
+                copyBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // Get the code text (from code element inside pre, or pre itself)
+                    const codeElement = pre.querySelector('code') || pre;
+                    const textToCopy = codeElement.textContent || codeElement.innerText;
+
+                    const success = await copyToClipboard(textToCopy);
+
+                    if (success) {
+                        // Visual feedback - show checkmark
+                        copyBtn.classList.add('copied');
+                        copyBtn.innerHTML = `
+                            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        `;
+
+                        // Reset after 2 seconds
+                        setTimeout(() => {
+                            copyBtn.classList.remove('copied');
+                            copyBtn.innerHTML = `
+                                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                            `;
+                        }, 2000);
+                    } else {
+                        // Show X icon briefly on error
+                        copyBtn.innerHTML = `
+                            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        `;
+                        setTimeout(() => {
+                            copyBtn.innerHTML = `
+                                <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                            `;
+                        }, 2000);
+                    }
+                });
+
+                // Insert button into pre element
+                pre.appendChild(copyBtn);
+            });
+        }
+
+        // --- Cross-platform Clipboard Copy ---
+        async function copyToClipboard(text) {
+            // Method 1: Modern Clipboard API (works on HTTPS or localhost)
+            if (navigator.clipboard && window.isSecureContext) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    console.log('[COPY] Success via Clipboard API');
+                    return true;
+                } catch (err) {
+                    console.warn('[COPY] Clipboard API failed:', err);
+                }
+            }
+
+            // Method 2: Fallback using execCommand (works on HTTP, older browsers)
+            try {
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+
+                // Avoid scrolling to bottom on iOS
+                textArea.style.position = 'fixed';
+                textArea.style.top = '0';
+                textArea.style.left = '0';
+                textArea.style.width = '2em';
+                textArea.style.height = '2em';
+                textArea.style.padding = '0';
+                textArea.style.border = 'none';
+                textArea.style.outline = 'none';
+                textArea.style.boxShadow = 'none';
+                textArea.style.background = 'transparent';
+                textArea.style.opacity = '0';
+
+                document.body.appendChild(textArea);
+
+                // iOS specific handling
+                if (navigator.userAgent.match(/ipad|iphone/i)) {
+                    const range = document.createRange();
+                    range.selectNodeContents(textArea);
+                    const selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    textArea.setSelectionRange(0, text.length);
+                } else {
+                    textArea.select();
+                }
+
+                const success = document.execCommand('copy');
+                document.body.removeChild(textArea);
+
+                if (success) {
+                    console.log('[COPY] Success via execCommand fallback');
+                    return true;
+                }
+            } catch (err) {
+                console.warn('[COPY] execCommand fallback failed:', err);
+            }
+
+            // Method 3: For Android WebView or restricted contexts
+            // Show the text in a selectable modal if all else fails
+            console.error('[COPY] All copy methods failed');
+            return false;
         }
 
         function scrollToBottom() {
@@ -1015,11 +1224,15 @@
 
         chatContainer.addEventListener('scroll', () => {
             userIsScrolling = true;
+            // Set a lock to prevent auto-scroll jumping for a few seconds
+            userScrollLockUntil = Date.now() + USER_SCROLL_LOCK_DURATION;
             clearTimeout(idleTimer);
 
             const isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 120;
             if (isNearBottom) {
                 scrollToBottomBtn.classList.remove('show');
+                // If user scrolled to bottom, clear the lock so auto-scroll works
+                userScrollLockUntil = 0;
             } else {
                 scrollToBottomBtn.classList.add('show');
             }
@@ -1040,6 +1253,7 @@
 
         scrollToBottomBtn.addEventListener('click', () => {
             userIsScrolling = false;
+            userScrollLockUntil = 0; // Clear lock so auto-scroll works again
             scrollToBottom();
         });
 
