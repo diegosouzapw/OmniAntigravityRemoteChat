@@ -39,25 +39,14 @@ fi
 if [ ! -f ".env" ]; then
     echo "[WARNING] .env file not found. This is required for Web Access."
     echo
-    echo "To use Web Access, you need an ngrok authtoken:"
-    echo "1. Sign up for free at https://ngrok.com"
-    echo "2. Get your 'Your Authtoken' from the ngrok dashboard."
-    echo
-    read -p "Would you like to create a template .env file now? (y/n): " create_env
-    if [[ $create_env == "y" || $create_env == "Y" ]]; then
-        cat <<EOT > .env
-# Antigravity Phone Connect Configuration
-# Get your token from https://dashboard.ngrok.com/get-started/your-authtoken
-NGROK_AUTHTOKEN=your_token_here
-# Set a custom password for remote access (optional, defaults to 6-digit passcode)
-APP_PASSWORD=antigravity
-PORT=3000
-EOT
-        echo "[SUCCESS] .env template created!"
-        echo "[ACTION] Please open .env and replace 'your_token_here' with your real token."
+    if [ -f ".env.example" ]; then
+        echo "[INFO] Creating .env from .env.example..."
+        cp .env.example .env
+        echo "[SUCCESS] .env created from template!"
+        echo "[ACTION] Please open .env and update it with your configuration (e.g., NGROK_AUTHTOKEN)."
         exit 0
     else
-        echo "[ERROR] Cannot proceed without .env configuration."
+        echo "[ERROR] .env.example not found. Cannot create .env template."
         exit 1
     fi
 fi

@@ -44,28 +44,19 @@ if exist "%~dp0.env" goto ENV_FOUND
 
 echo [WARNING] .env file not found. This is required for Web Access.
 echo.
-echo To use Web Access, you need an ngrok authtoken:
-echo 1. Sign up for free at https://ngrok.com
-echo 2. Get your 'Your Authtoken' from the ngrok dashboard.
-echo.
-set /p "create_env=Would you like to create a template .env file now? (y/n): "
-if /i "!create_env!"=="y" (
-    echo # Antigravity Phone Connect Configuration > .env
-    echo # Get your token from https://dashboard.ngrok.com/get-started/your-authtoken >> .env
-    echo NGROK_AUTHTOKEN=your_token_here >> .env
-    echo # Set a custom password for remote access (optional, defaults to 6-digit passcode) >> .env
-    echo APP_PASSWORD=antigravity >> .env
-    echo PORT=3000 >> .env
-    echo.
-    echo [SUCCESS] .env template created! 
-    echo [ACTION] Please open .env and replace 'your_token_here' with your real token.
+
+if exist ".env.example" (
+    echo [INFO] Creating .env from .env.example...
+    copy .env.example .env >nul
+    echo [SUCCESS] .env created from template!
+    echo [ACTION] Please open .env and update it with your configuration (e.g., NGROK_AUTHTOKEN).
+    pause
+    exit /b
+) else (
+    echo [ERROR] .env.example not found. Cannot create .env template.
     pause
     exit /b
 )
-
-echo [ERROR] Cannot proceed without .env configuration.
-pause
-exit /b
 
 :ENV_FOUND
 echo [INFO] .env configuration found.
