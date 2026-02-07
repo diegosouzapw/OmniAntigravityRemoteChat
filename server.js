@@ -581,81 +581,118 @@ async function remoteScroll(cdp, { scrollTop, scrollPercent }) {
 async function setModel(cdp, modelName) {
     const EXP = `(async () => {
         try {
-            // STRATEGY: Find the element that IS the specific model we want to click.
-            // But first we must find the Open Menu button.
-            
-            // 1. Find the model selector button (currently displaying some model)
-            // It will usually contain a model name like "Gemini" or "Claude" and have a chevron.
+            // STRATEGY: Multi-layered approach to find and click the model selector
             const KNOWN_KEYWORDS = ["Gemini", "Claude", "GPT", "Model"];
             
-            const allEls = Array.from(document.querySelectorAll('*'));
-            const candidates = allEls.filter(el => {
-                if (el.children.length > 0) return false; // Text nodes only
-                const txt = el.textContent;
-                return KNOWN_KEYWORDS.some(k => txt.includes(k));
-            });
-
-            // Find clickable parent
             let modelBtn = null;
-            for (const el of candidates) {
-                let current = el;
-                for (let i = 0; i < 5; i++) {
-                    if (!current) break;
-                    if (current.tagName === 'BUTTON' || window.getComputedStyle(current).cursor === 'pointer') {
-                        // Must also likely contain the chevron to be the selector, not just a label
-                        if (current.querySelector('svg.lucide-chevron-up') || current.innerText.includes('Model')) {
+            
+            // Strategy 1: Look for data-tooltip-id patterns (most reliable)
+            modelBtn = document.querySelector('[data-tooltip-id*="model"], [data-tooltip-id*="provider"]');
+            
+            // Strategy 2: Look for buttons/elements containing model keywords with SVG icons
+            if (!modelBtn) {
+                const candidates = Array.from(document.querySelectorAll('button, [role="button"], div, span'))
+                    .filter(el => {
+                        const txt = el.innerText?.trim() || '';
+                        return KNOWN_KEYWORDS.some(k => txt.includes(k)) && el.offsetParent !== null;
+                    });
+
+                // Find the best one (has chevron icon or cursor pointer)
+                modelBtn = candidates.find(el => {
+                    const style = window.getComputedStyle(el);
+                    const hasSvg = el.querySelector('svg.lucide-chevron-up') || 
+                                   el.querySelector('svg.lucide-chevron-down') || 
+                                   el.querySelector('svg[class*="chevron"]') ||
+                                   el.querySelector('svg');
+                    return (style.cursor === 'pointer' || el.tagName === 'BUTTON') && hasSvg;
+                }) || candidates[0];
+            }
+            
+            // Strategy 3: Traverse from text nodes up to clickable parents
+            if (!modelBtn) {
+                const allEls = Array.from(document.querySelectorAll('*'));
+                const textNodes = allEls.filter(el => {
+                    if (el.children.length > 0) return false;
+                    const txt = el.textContent;
+                    return KNOWN_KEYWORDS.some(k => txt.includes(k));
+                });
+
+                for (const el of textNodes) {
+                    let current = el;
+                    for (let i = 0; i < 5; i++) {
+                        if (!current) break;
+                        if (current.tagName === 'BUTTON' || window.getComputedStyle(current).cursor === 'pointer') {
                             modelBtn = current;
                             break;
                         }
+                        current = current.parentElement;
                     }
-                    current = current.parentElement;
+                    if (modelBtn) break;
                 }
-                if (modelBtn) break;
             }
 
             if (!modelBtn) return { error: 'Model selector button not found' };
 
-            // 2. Click to open
+            // Click to open menu
             modelBtn.click();
             await new Promise(r => setTimeout(r, 600));
 
-            // 3. Find the dialog/dropdown
-            const visibleDialog = Array.from(document.querySelectorAll('[role="dialog"], div'))
-                .find(d => {
-                    const style = window.getComputedStyle(d);
-                    return d.offsetHeight > 0 && 
-                           (style.position === 'absolute' || style.position === 'fixed') && 
-                           d.innerText.includes('${modelName}') && 
-                           !d.innerText.includes('Files With Changes');
-                });
+            // Find the dialog/dropdown - search globally (React portals render at body level)
+            let visibleDialog = null;
+            
+            // Try specific dialog patterns first
+            const dialogs = Array.from(document.querySelectorAll('[role="dialog"], [role="listbox"], [role="menu"], [data-radix-popper-content-wrapper]'));
+            visibleDialog = dialogs.find(d => d.offsetHeight > 0 && d.innerText?.includes('${modelName}'));
+            
+            // Fallback: look for positioned divs
+            if (!visibleDialog) {
+                visibleDialog = Array.from(document.querySelectorAll('div'))
+                    .find(d => {
+                        const style = window.getComputedStyle(d);
+                        return d.offsetHeight > 0 && 
+                               (style.position === 'absolute' || style.position === 'fixed') && 
+                               d.innerText?.includes('${modelName}') && 
+                               !d.innerText?.includes('Files With Changes');
+                    });
+            }
 
-            if (!visibleDialog) return { error: 'Model list not opened' };
+            if (!visibleDialog) {
+                // Blind search across entire document as last resort
+                const allElements = Array.from(document.querySelectorAll('[role="menuitem"], [role="option"]'));
+                const target = allElements.find(el => 
+                    el.offsetParent !== null && 
+                    (el.innerText?.trim() === '${modelName}' || el.innerText?.includes('${modelName}'))
+                );
+                if (target) {
+                    target.click();
+                    return { success: true, method: 'blind_search' };
+                }
+                return { error: 'Model list not opened' };
+            }
 
-            // 4. Select specific model inside the dialog
-            // Search deep for the specific text
+            // Select specific model inside the dialog
             const allDialogEls = Array.from(visibleDialog.querySelectorAll('*'));
-            const validEls = allDialogEls.filter(el => el.children.length === 0 && el.textContent.trim().length > 0);
+            const validEls = allDialogEls.filter(el => el.children.length === 0 && el.textContent?.trim().length > 0);
             
             // A. Exact Match (Best)
             let target = validEls.find(el => el.textContent.trim() === '${modelName}');
             
-            // B. Page contains Model (e.g. Page: "Gemini 3 Pro v1.5", Model: "Gemini 3 Pro")
+            // B. Page contains Model
             if (!target) {
-                 target = validEls.find(el => el.textContent.includes('${modelName}'));
+                target = validEls.find(el => el.textContent.includes('${modelName}'));
             }
 
-            // C. Model contains Page (e.g. Page: "Gemini 3 Pro", Model: "Gemini 3 Pro (High)")
-            // We must find the LONGEST match to avoid matching "Gemini" when "Gemini 3" exists.
+            // C. Closest partial match
             if (!target) {
-                const candidates = validEls.filter(el => '${modelName}'.includes(el.textContent.trim()));
-                if (candidates.length > 0) {
-                    // Sort by length descending
-                    candidates.sort((a, b) => b.textContent.trim().length - a.textContent.trim().length);
-                    target = candidates[0];
+                const partialMatches = validEls.filter(el => '${modelName}'.includes(el.textContent.trim()));
+                if (partialMatches.length > 0) {
+                    partialMatches.sort((a, b) => b.textContent.trim().length - a.textContent.trim().length);
+                    target = partialMatches[0];
                 }
             }
 
             if (target) {
+                target.scrollIntoView({block: 'center'});
                 target.click();
                 await new Promise(r => setTimeout(r, 200));
                 return { success: true };
