@@ -818,7 +818,7 @@ async function checkChatStatus() {
 // --- Empty State (No Chat Open) ---
 function showEmptyState() {
     chatContent.innerHTML = `
-                < div class="empty-state" >
+        <div class="empty-state">
             <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                 <line x1="9" y1="10" x2="15" y2="10"></line>
@@ -828,8 +828,8 @@ function showEmptyState() {
             <button class="empty-state-btn" onclick="startNewChat()">
                 Start New Conversation
             </button>
-        </div >
-                `;
+        </div>
+    `;
 }
 
 // --- Utility: Escape HTML ---
