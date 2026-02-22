@@ -1,22 +1,32 @@
 #!/usr/bin/env node
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import { fileURLToPath as _fu } from 'url';
+import { dirname as _dn, join as _jn } from 'path';
+// Load .env from the package's own directory (not the cwd where npx runs)
+const _ownDir = _dn(_dn(_fu(import.meta.url)));
+const _ownEnv = _jn(_ownDir, '.env');
+import fs from 'fs';
+if (fs.existsSync(_ownEnv)) {
+    dotenv.config({ path: _ownEnv });
+} else {
+    dotenv.config(); // fallback to cwd
+}
 import express from 'express';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import https from 'https';
-import fs from 'fs';
+
 import os from 'os';
 import WebSocket from 'ws';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+
 import { inspectUI } from './ui_inspector.js';
 import { execSync, spawn } from 'child_process';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const PROJECT_ROOT = join(__dirname, '..');
+const __filename = _fu(import.meta.url);
+const __dirname = _dn(__filename);
+const PROJECT_ROOT = _jn(__dirname, '..');
 
 const PORTS = [7800, 7801, 7802, 7803];
 const POLL_INTERVAL = 1000; // 1 second
@@ -1501,8 +1511,8 @@ async function createServer() {
     const app = express();
 
     // Check for SSL certificates
-    const keyPath = join(PROJECT_ROOT, 'certs', 'server.key');
-    const certPath = join(PROJECT_ROOT, 'certs', 'server.cert');
+    const keyPath = _jn(PROJECT_ROOT, 'certs', 'server.key');
+    const certPath = _jn(PROJECT_ROOT, 'certs', 'server.cert');
     const hasSSL = fs.existsSync(keyPath) && fs.existsSync(certPath);
 
     let server;
@@ -1581,7 +1591,7 @@ async function createServer() {
         }
     });
 
-    app.use(express.static(join(PROJECT_ROOT, 'public')));
+    app.use(express.static(_jn(PROJECT_ROOT, 'public')));
 
     // Login endpoint
     app.post('/login', (req, res) => {
@@ -1626,8 +1636,8 @@ async function createServer() {
 
     // SSL status endpoint
     app.get('/ssl-status', (req, res) => {
-        const keyPath = join(PROJECT_ROOT, 'certs', 'server.key');
-        const certPath = join(PROJECT_ROOT, 'certs', 'server.cert');
+        const keyPath = _jn(PROJECT_ROOT, 'certs', 'server.key');
+        const certPath = _jn(PROJECT_ROOT, 'certs', 'server.cert');
         const certsExist = fs.existsSync(keyPath) && fs.existsSync(certPath);
         res.json({
             enabled: hasSSL,
