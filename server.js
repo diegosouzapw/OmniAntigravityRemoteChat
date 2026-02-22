@@ -17,9 +17,9 @@ import { execSync } from 'child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const PORTS = [9000, 9001, 9002, 9003];
+const PORTS = [7800, 7801, 7802, 7803];
 const POLL_INTERVAL = 1000; // 1 second
-const SERVER_PORT = process.env.PORT || 3000;
+const SERVER_PORT = process.env.PORT || 4747;
 const APP_PASSWORD = process.env.APP_PASSWORD || 'antigravity';
 const AUTH_COOKIE_NAME = 'omni_ag_auth';
 // Note: hashString is defined later, so we'll initialize the token inside createServer or use a simple string for now.
@@ -1881,7 +1881,7 @@ async function main() {
         await initCDP();
     } catch (err) {
         console.warn(`⚠️  Initial CDP discovery failed: ${err.message}`);
-        console.log('💡 Start Antigravity with --remote-debugging-port=9000 to connect.');
+        console.log('💡 Start Antigravity with --remote-debugging-port=7800 to connect.');
     }
 
     try {

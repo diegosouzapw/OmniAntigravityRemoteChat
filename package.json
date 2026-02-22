@@ -7,7 +7,8 @@
         "start": "node server.js",
         "dev": "node server.js",
         "start:local": "node launcher.js --mode local",
-        "start:web": "node launcher.js --mode web"
+        "start:web": "node launcher.js --mode web",
+        "test": "node test.js"
     },
     "dependencies": {
         "compression": "^1.8.1",
