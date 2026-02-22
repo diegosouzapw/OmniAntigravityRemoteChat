@@ -2084,10 +2084,49 @@ async function main() {
         const localIP = getLocalIP();
         const protocol = hasSSL ? 'https' : 'http';
         server.listen(SERVER_PORT, '0.0.0.0', () => {
-            console.log(`🚀 Server running on ${protocol}://${localIP}:${SERVER_PORT}`);
-            if (hasSSL) {
-                console.log(`💡 First time on phone? Accept the security warning to proceed.`);
-            }
+            const url = `${protocol}://${localIP}:${SERVER_PORT}`;
+            const ver = '0.4.8';
+
+            // ANSI color helpers
+            const R  = '\x1b[0m';
+            const B  = '\x1b[1m';
+            const DIM = '\x1b[2m';
+            const c1 = '\x1b[38;5;99m';   // purple
+            const c2 = '\x1b[38;5;135m';  // magenta
+            const c3 = '\x1b[38;5;141m';  // light purple
+            const c4 = '\x1b[38;5;147m';  // lavender
+            const GR = '\x1b[38;5;82m';   // green
+            const CY = '\x1b[38;5;81m';   // cyan
+            const YL = '\x1b[38;5;220m';  // yellow
+            const WH = '\x1b[38;5;255m';  // white
+
+            console.log('');
+            console.log(`${c1}${B}    ╔═══════════════════════════════════════════════════╗${R}`);
+            console.log(`${c1}${B}    ║${R}                                                   ${c1}${B}║${R}`);
+            console.log(`${c2}${B}    ║${R}  ${c2}${B}  ██████╗ ███╗   ███╗███╗   ██╗██╗${R}              ${c2}${B}║${R}`);
+            console.log(`${c2}${B}    ║${R}  ${c2}${B} ██╔═══██╗████╗ ████║████╗  ██║██║${R}              ${c2}${B}║${R}`);
+            console.log(`${c3}${B}    ║${R}  ${c3}${B} ██║   ██║██╔████╔██║██╔██╗ ██║██║${R}              ${c3}${B}║${R}`);
+            console.log(`${c3}${B}    ║${R}  ${c3}${B} ██║   ██║██║╚██╔╝██║██║╚██╗██║██║${R}              ${c3}${B}║${R}`);
+            console.log(`${c4}${B}    ║${R}  ${c4}${B} ╚██████╔╝██║ ╚═╝ ██║██║ ╚████║██║${R}              ${c4}${B}║${R}`);
+            console.log(`${c4}${B}    ║${R}  ${c4}${B}  ╚═════╝ ╚═╝     ╚═╝╚═╝  ╚═══╝╚═╝${R}              ${c4}${B}║${R}`);
+            console.log(`${c1}${B}    ║${R}                                                   ${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ║${R}  ${WH}${B}Antigravity Remote Chat${R}  ${DIM}v${ver}${R}                  ${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ║${R}  ${DIM}Mobile remote control for AI sessions${R}              ${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ║${R}                                                   ${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ╠═══════════════════════════════════════════════════╣${R}`);
+            console.log(`${c1}${B}    ║${R}                                                   ${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ║${R}  ${GR}▸${R} ${WH}${B}Server${R}    ${CY}${url}${R}${' '.repeat(Math.max(0, 30 - url.length))}${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ║${R}  ${GR}▸${R} ${WH}${B}Protocol${R}  ${hasSSL ? `${GR}HTTPS 🔒${R}` : `${YL}HTTP${R}`}${' '.repeat(hasSSL ? 22 : 26)}${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ║${R}  ${GR}▸${R} ${WH}${B}CDP${R}       ${DIM}ports 7800-7803${R}                      ${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ║${R}                                                   ${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ╠═══════════════════════════════════════════════════╣${R}`);
+            console.log(`${c1}${B}    ║${R}                                                   ${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ║${R}  ${DIM}📱 Open this URL on your phone${R}                    ${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ║${R}  ${DIM}🪟 Multi-window switching available${R}                ${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ║${R}  ${DIM}⏹  Press Ctrl+C to stop${R}                           ${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ║${R}                                                   ${c1}${B}║${R}`);
+            console.log(`${c1}${B}    ╚═══════════════════════════════════════════════════╝${R}`);
+            console.log('');
         });
 
         // Graceful shutdown handlers
