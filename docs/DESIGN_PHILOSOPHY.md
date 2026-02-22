@@ -22,11 +22,11 @@ The snapshot system clones the DOM before capturing, ensuring the mirroring proc
 
 Instead of mirroring thousands of Antigravity CSS variables, we use **Aggressive CSS Inheritance**. Raw HTML is wrapped in a premium indigo/purple gradient palette with glassmorphism effects that feels natively mobile.
 
-### 4. Multi-Window First (v0.3.1+)
+### 4. Multi-Window First (v0.4.0+)
 
-Developers often run multiple Antigravity windows. The system discovers ALL CDP targets across ports 7800-7803 and lets users switch between them from their phone.
+Developers often run multiple Antigravity windows. The system discovers ALL CDP targets across ports 7800-7803, intelligently filters out internal pages (Settings, Launchpad), and lets users switch between real editor windows from their phone. Execution context evaluation loops are designed to try ALL iframe contexts before giving up, ensuring chat detection works even in complex window layouts.
 
-### 5. Resilient Connectivity (v0.3.1+)
+### 5. Resilient Connectivity (v0.4.3+)
 
 - **Exponential Backoff**: Reconnection attempts grow from 2s to 30s, then reset on success
 - **WebSocket Heartbeat**: Ping/pong every 30s detects stale connections before they fail
@@ -65,5 +65,7 @@ Full-screen modals for history, settings, and window selection. Sidebar navigati
 | Passcode auth (not OAuth) | Low friction for personal tool                   |
 | Exponential backoff       | Prevents server spam during Antigravity restarts |
 | Phone-as-Master scroll    | Prevents sync-fighting conflicts                 |
+| 15s scroll lock           | Gives users time to interact with buttons        |
+| Force-expand all sections | Collapsed content is unusable on small screens   |
 
 > 📚 See [SECURITY.md](../SECURITY.md) for security details and [CODE_DOCUMENTATION.md](CODE_DOCUMENTATION.md) for API reference.

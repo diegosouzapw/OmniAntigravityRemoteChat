@@ -2,10 +2,40 @@
     "name": "omni-antigravity-remote-chat",
     "version": "0.4.6",
     "type": "module",
-    "description": "Premium mobile remote control for Antigravity AI sessions via CDP mirroring",
+    "description": "Premium mobile remote control for Antigravity AI sessions via CDP mirroring — multi-window, chat history, real-time sync",
+    "keywords": [
+        "antigravity",
+        "windsurf",
+        "mobile",
+        "remote",
+        "chat",
+        "ai",
+        "cdp",
+        "chrome-devtools-protocol",
+        "ide",
+        "vscode"
+    ],
+    "homepage": "https://github.com/diegosouzapw/OmniAntigravityRemoteChat",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/diegosouzapw/OmniAntigravityRemoteChat.git"
+    },
+    "bugs": {
+        "url": "https://github.com/diegosouzapw/OmniAntigravityRemoteChat/issues"
+    },
     "bin": {
         "omni-chat": "./src/server.js"
     },
+    "files": [
+        "src/",
+        "public/",
+        "scripts/",
+        "launcher.js",
+        "test.js",
+        ".env.example",
+        "README.md",
+        "LICENSE"
+    ],
     "scripts": {
         "start": "node src/server.js",
         "dev": "node src/server.js",
@@ -22,7 +52,10 @@
         "qrcode-terminal": "^0.12.0",
         "ws": "^8.18.0"
     },
-    "author": "Krishna Kanth B (krishnakanthb13)",
+    "author": "Diego Souza <diegosouzapw@gmail.com> (https://github.com/diegosouzapw)",
+    "contributors": [
+        "Krishna Kanth B (https://github.com/krishnakanthb13)"
+    ],
     "license": "GPL-3.0-only",
     "engines": {
         "node": ">=16.0.0"

@@ -1,4 +1,4 @@
-# CODE DOCUMENTATION — OmniAntigravity Remote Chat v0.3.6
+# CODE DOCUMENTATION — OmniAntigravity Remote Chat v0.4.6
 
 ## Project Structure
 
@@ -143,11 +143,21 @@ graph TD
 - **CDP Status Broadcasting**: Server sends `cdp_status` events to all mobile clients.
 - **Mobile Toast**: Shows "⏳ Reconnecting..." and "✅ Connected!" notifications.
 
-## Multi-Window Support (v0.3.1+)
+## Multi-Window Support (v0.4.0+)
 
-- **Target Discovery**: `discoverAllCDP()` scans all ports for multiple Antigravity instances.
+- **Target Discovery**: `discoverAllCDP()` scans all ports for multiple Antigravity editor windows.
+- **Smart Filtering**: Excludes internal pages (Settings, Launchpad, jetski) — only real workbenches shown.
 - **Target Switching**: `POST /select-target` closes current connection and opens new one.
-- **Mobile Selector**: "Window" chip in settings bar shows when multiple targets available.
+- **Retry Logic**: Frontend waits 2s for contexts, then retries snapshot loading up to 5x.
+- **Mobile Selector**: "Window" chip in settings bar shows all detected windows.
+- **Launch Windows**: `POST /api/launch-window` spawns new Antigravity instances.
+- **Context Evaluation**: All CDP context loops (`hasChatOpen`, `getChatHistory`, `getAppState`, `selectChat`) skip non-matching contexts instead of returning prematurely.
+
+## UX Improvements (v0.4.5+)
+
+- **Force Expanded Sections**: All `<details>` and collapsible containers are forced open via CSS + JS.
+- **Extended Scroll Lock**: 15-second protection prevents auto-scroll from fighting user interaction.
+- **Transient 503 Protection**: `loadSnapshot()` doesn't trigger "No Chat Open" during window switching.
 
 ## Execution Flow
 
