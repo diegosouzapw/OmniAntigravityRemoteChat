@@ -4,7 +4,9 @@
 
 **Control your Antigravity AI sessions from your phone.**
 
-![Version](https://img.shields.io/badge/version-0.4.6-6366f1) ![Node](https://img.shields.io/badge/node-16%2B-10b981) ![CI](https://github.com/diegosouzapw/OmniAntigravityRemoteChat/actions/workflows/ci.yml/badge.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue) ![npm](https://img.shields.io/npm/v/omni-antigravity-remote-chat?color=cc3534)
+![Version](https://img.shields.io/badge/version-0.4.6-6366f1) ![Node](https://img.shields.io/badge/node-16%2B-10b981) ![CI](https://github.com/diegosouzapw/OmniAntigravityRemoteChat/actions/workflows/ci.yml/badge.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
+
+[![npm](https://img.shields.io/npm/v/omni-antigravity-remote-chat?color=cc3534&logo=npm)](https://www.npmjs.com/package/omni-antigravity-remote-chat) [![npm downloads](https://img.shields.io/npm/dm/omni-antigravity-remote-chat?color=blue&logo=npm)](https://www.npmjs.com/package/omni-antigravity-remote-chat)
 
 _Mirror your desktop AI chat on your phone in real-time. Send messages, switch models, manage multiple windows — all from your mobile browser._
 
@@ -34,9 +36,11 @@ _Mirror your desktop AI chat on your phone in real-time. Send messages, switch m
 # Install globally
 npm install -g omni-antigravity-remote-chat
 
-# Run
+# Run anywhere
 omni-chat
 ```
+
+> 📦 [View on npmjs.com](https://www.npmjs.com/package/omni-antigravity-remote-chat)
 
 ### Option B — npx (No Install)
 
