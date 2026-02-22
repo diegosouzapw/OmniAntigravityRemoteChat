@@ -239,6 +239,8 @@ async function loadSnapshot() {
             '    position: relative !important;\n' +
             '    height: auto !important;\n' +
             '    width: 100% !important;\n' +
+            '    max-width: 100% !important;\n' +
+            '    overflow: hidden !important;\n' +
             '}\n' +
             '\n' +
             '/* Fix stacking BUT preserve absolute/fixed positioning for dropdowns */\n' +
@@ -774,19 +776,62 @@ async function showChatHistory() {
     const historyLayer = document.getElementById('historyLayer');
     const historyList = document.getElementById('historyList');
 
-    // Temporary: Feature is in development
+    // Show layer immediately with loading state
     historyList.innerHTML = `
-        <div style="padding: 40px 20px; text-align: center; color: white;">
-            <div style="font-size: 24px; margin-bottom: 10px;">🚧</div>
-            <div style="font-weight: 500; margin-bottom: 5px;">History In Development</div>
-            <div style="font-size: 13px; opacity: 0.7;">We are working on improving the history sync. Check back soon!</div>
-            <br>
-            <div class="history-item new-chat-item" onclick="hideChatHistory(); startNewChat();" style="justify-content: center; background: var(--accent); color: white; border:none;">
-                Start New Conversation
-            </div>
+        <div style="padding: 40px 20px; text-align: center; color: var(--text-muted);">
+            <div class="loading-spinner" style="margin: 0 auto 12px;"></div>
+            Loading conversations...
         </div>
     `;
     historyLayer.classList.add('show');
+
+    try {
+        const res = await fetchWithAuth('/chat-history');
+        const data = await res.json();
+        const chats = data.history || [];
+
+        if (chats.length === 0) {
+            historyList.innerHTML = `
+                <div class="history-empty">
+                    <div style="font-size: 20px; margin-bottom: 8px;">💬</div>
+                    No conversations found.
+                    <br><span style="font-size: 11px; opacity: 0.6;">Open a chat in Antigravity first.</span>
+                </div>
+                <div class="history-item new-chat-item" onclick="hideChatHistory(); startNewChat();"
+                     style="justify-content: center; margin: 16px; background: var(--accent); color: white; border: none; border-radius: 12px;">
+                    + Start New Conversation
+                </div>
+            `;
+        } else {
+            let html = chats.map((chat, i) => `
+                <div class="history-item" onclick="hideChatHistory(); selectChat('${chat.title.replace(/'/g, "\\'")}');">
+                    <div class="history-title">${chat.title}</div>
+                    ${chat.active ? '<span style="font-size: 9px; color: var(--success); font-weight: 600;">● ACTIVE</span>' : ''}
+                </div>
+            `).join('');
+
+            html += `
+                <div class="history-item new-chat-item" onclick="hideChatHistory(); startNewChat();"
+                     style="justify-content: center; margin: 8px 0; background: var(--accent); color: white; border: none; border-radius: 12px;">
+                    + New Conversation
+                </div>
+            `;
+            historyList.innerHTML = html;
+        }
+    } catch (e) {
+        console.error('Failed to load history:', e);
+        historyList.innerHTML = `
+            <div class="history-empty">
+                <div style="font-size: 20px; margin-bottom: 8px;">⚠️</div>
+                Could not load conversations.
+                <br><span style="font-size: 11px; opacity: 0.6;">${e.message}</span>
+            </div>
+            <div class="history-item new-chat-item" onclick="hideChatHistory(); startNewChat();"
+                 style="justify-content: center; margin: 16px; background: var(--accent); color: white; border: none; border-radius: 12px;">
+                + Start New Conversation
+            </div>
+        `;
+    }
     setTimeout(() => historyBtn.style.opacity = '1', 300);
 }
 
