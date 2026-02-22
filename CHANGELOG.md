@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-02-22
+
+### Added
+
+- 🚀 Unified release workflow: auto GitHub Release + NPM publish on version bump
+- 📖 Launch Modes section in README (Git Clone vs NPM, ngrok, SSL guides)
+- 🎨 Premium open-right startup banner with ANSI gradient
+- 📝 CHANGELOG updated with full v0.4.x history
+
+### Changed
+
+- ⬆️ All deps at latest: dotenv 17.3.1, express 4.22.1
+- 🔧 Node.js minimum: 22
+- 🔧 CI matrix: Node 22 + 24
+
+### Fixed
+
+- 🐛 npx loading wrong `.env` from cwd instead of package directory
+- 🐛 Banner alignment issues with ANSI escape codes
+
 ## [0.4.10] - 2026-02-22
 
 ### Changed
