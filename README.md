@@ -59,7 +59,7 @@ npm start
 
 ### Prerequisites
 
-1. **Node.js 16+** — `node --version`
+1. **Node.js 22+** — `node --version`
 2. **Antigravity** launched in debug mode:
 
 ```bash
@@ -113,6 +113,72 @@ cp .env.example .env
 | **4747** | OmniAntigravity web server |        `PORT` in `.env`        |
 
 > These ports were chosen to avoid conflicts with common services (3000, 5000, 8080, 9000).
+
+---
+
+## 🚀 Launch Modes
+
+### Git Clone (full control)
+
+When you clone the repo, all launch modes are available via `npm run`:
+
+```bash
+npm start              # Start server directly
+npm run start:local    # Start with QR code for Wi-Fi access
+npm run start:web      # Start with ngrok tunnel for internet access
+npm run setup:ssl      # Generate trusted HTTPS certificates
+```
+
+### NPM Global Install
+
+When installed via `npm install -g`, you get the `omni-chat` command:
+
+```bash
+omni-chat              # Start server (equivalent to npm start)
+```
+
+### ngrok (Remote Access via NPM)
+
+To access from outside your local network using the NPM-installed version:
+
+```bash
+# Terminal 1: Start the server
+omni-chat
+
+# Terminal 2: Start ngrok tunnel
+npx ngrok http 4747
+```
+
+ngrok will give you a public URL like `https://abc123.ngrok.io` — open it on any device.
+
+> **Full ngrok integration** (automatic tunnel + QR code) is available via `npm run start:web` when using the cloned repo with `NGROK_AUTHTOKEN` set in `.env`.
+
+### SSL Setup (NPM Global)
+
+For HTTPS with the NPM-installed version:
+
+```bash
+# Install mkcert (one-time)
+sudo apt install mkcert   # Linux
+brew install mkcert        # macOS
+
+# Generate certificates
+mkcert -install
+OMNI_DIR=$(npm root -g)/omni-antigravity-remote-chat
+mkdir -p $OMNI_DIR/certs
+mkcert -key-file $OMNI_DIR/certs/server.key \
+       -cert-file $OMNI_DIR/certs/server.cert \
+       localhost $(hostname -I | awk '{print $1}')
+```
+
+### Quick Reference
+
+| Feature      | Git Clone             | NPM Global                          |
+| ------------ | --------------------- | ----------------------------------- |
+| Basic server | `npm start`           | `omni-chat`                         |
+| QR code      | `npm run start:local` | `omni-chat` (shows URL)             |
+| ngrok tunnel | `npm run start:web`   | `omni-chat` + `npx ngrok http 4747` |
+| SSL setup    | `npm run setup:ssl`   | Manual with `mkcert`                |
 
 ---
 
