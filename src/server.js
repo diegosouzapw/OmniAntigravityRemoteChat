@@ -194,22 +194,33 @@ async function discoverCDP() {
 }
 
 // Discover ALL available CDP targets across all ports (multi-window)
+// Only includes real editor workbench windows (excludes Settings, Launchpad, etc.)
 async function discoverAllCDP() {
     const allTargets = [];
+    // Internal pages that don't have chat capability
+    const EXCLUDED_TITLES = ['launchpad', 'settings'];
     for (const port of PORTS) {
         try {
             const list = await getJson(`http://127.0.0.1:${port}/json/list`);
             for (const t of list) {
-                if (t.webSocketDebuggerUrl && (t.url?.includes('workbench.html') || t.title?.includes('workbench') || t.url?.includes('jetski') || t.title === 'Launchpad')) {
-                    allTargets.push({
-                        id: `${port}:${t.id}`,
-                        port,
-                        title: t.title || 'Untitled',
-                        url: t.url,
-                        wsUrl: t.webSocketDebuggerUrl,
-                        type: t.url?.includes('workbench') ? 'workbench' : 'other'
-                    });
-                }
+                if (!t.webSocketDebuggerUrl) continue;
+
+                // Only include standard workbench pages (editor windows)
+                const isWorkbench = t.url?.includes('workbench.html') && !t.url?.includes('jetski');
+                if (!isWorkbench) continue;
+
+                // Skip internal pages (Settings, Launchpad, etc.)
+                const titleLower = (t.title || '').toLowerCase();
+                if (EXCLUDED_TITLES.some(ex => titleLower === ex)) continue;
+
+                allTargets.push({
+                    id: `${port}:${t.id}`,
+                    port,
+                    title: t.title || 'Untitled',
+                    url: t.url,
+                    wsUrl: t.webSocketDebuggerUrl,
+                    type: 'workbench'
+                });
             }
         } catch (e) { /* port not responding */ }
     }

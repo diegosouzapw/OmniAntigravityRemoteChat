@@ -1126,7 +1126,13 @@ async function showTargetSelector() {
         if (data.targets && data.targets.length > 0) {
             options = data.targets.map(t => {
                 const isActive = t.id === data.activeTarget;
-                return isActive ? `✅ ${t.title} (Active)` : `🖥️ ${t.title} (port ${t.port})`;
+                // Clean up the title: extract workspace name from "workspace - Antigravity - file.ext"
+                let displayName = t.title || 'Untitled';
+                const parts = displayName.split(' - Antigravity - ');
+                if (parts.length >= 2) {
+                    displayName = `${parts[0]} — ${parts.slice(1).join(' - ')}`;
+                }
+                return isActive ? `✅ ${displayName} (Active)` : `🖥️ ${displayName}`;
             });
         } else {
             options = ['No Antigravity instances detected'];
