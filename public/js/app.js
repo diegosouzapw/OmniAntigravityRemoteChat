@@ -790,7 +790,7 @@ async function showChatHistory() {
     try {
         const res = await fetchWithAuth('/chat-history');
         const data = await res.json();
-        const chats = data.history || [];
+        const chats = data.chats || data.history || [];
 
         if (chats.length === 0) {
             historyList.innerHTML = `
