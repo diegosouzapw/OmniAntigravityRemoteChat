@@ -51,7 +51,7 @@ async function fetchWithAuth(url, options = {}) {
         throw e;
     }
 }
-const USER_SCROLL_LOCK_DURATION = 3000; // 3 seconds of scroll protection
+const USER_SCROLL_LOCK_DURATION = 15000; // 15 seconds of scroll protection (user needs time to interact)
 
 // --- Sync State (Desktop is Always Priority) ---
 async function fetchAppState() {
@@ -397,10 +397,36 @@ async function loadSnapshot() {
             '[style*="background-color: white"],\n' +
             '[style*="background: white"] {\n' +
             '    background-color: transparent !important;\n' +
+            '}\n' +
+            '\n' +
+            '/* Force all collapsible sections expanded */\n' +
+            'details { display: block !important; }\n' +
+            'details > summary { pointer-events: none !important; list-style: none !important; }\n' +
+            'details > summary::-webkit-details-marker { display: none !important; }\n' +
+            'details > *:not(summary) { display: block !important; }\n' +
+            '/* Expand any Antigravity-specific collapsed containers */\n' +
+            '[data-collapsed], [aria-expanded="false"] {\n' +
+            '    max-height: none !important;\n' +
+            '    height: auto !important;\n' +
+            '    overflow: visible !important;\n' +
+            '    opacity: 1 !important;\n' +
+            '}\n' +
+            '/* Show Collapse/Expand buttons text but keep sections open */\n' +
+            '[class*="collapse"], [class*="Collapse"] {\n' +
+            '    max-height: none !important;\n' +
+            '    height: auto !important;\n' +
+            '    overflow: visible !important;\n' +
             '}';
         styleTag.textContent = darkModeOverrides;
         chatContent.innerHTML = data.html;
 
+        // Force all <details> elements to be open (CSS can't do this, need JS)
+        chatContent.querySelectorAll('details').forEach(d => d.setAttribute('open', ''));
+
+        // Force expand any Antigravity collapsed sections
+        chatContent.querySelectorAll('[aria-expanded="false"]').forEach(el => {
+            el.setAttribute('aria-expanded', 'true');
+        });
 
         // Add mobile copy buttons to all code blocks
         addMobileCopyButtons();
