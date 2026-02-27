@@ -2,53 +2,83 @@
 
 # 📱 OmniAntigravity Remote Chat
 
-**Control your Antigravity AI sessions from your phone.**
+### Your AI coding session shouldn't end when you leave your desk.
+
+<br/>
+
+<img src="assets/hero-banner.png" alt="Control your AI from the couch" width="700" />
+
+<br/>
+<br/>
 
 ![Version](https://img.shields.io/badge/version-0.5.0-6366f1) ![Node](https://img.shields.io/badge/node-22%2B-10b981) ![CI](https://github.com/diegosouzapw/OmniAntigravityRemoteChat/actions/workflows/ci.yml/badge.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
-[![npm](https://img.shields.io/npm/v/omni-antigravity-remote-chat?color=cc3534&logo=npm)](https://www.npmjs.com/package/omni-antigravity-remote-chat) [![npm downloads](https://img.shields.io/npm/dm/omni-antigravity-remote-chat?color=blue&logo=npm)](https://www.npmjs.com/package/omni-antigravity-remote-chat)
+[![npm](https://img.shields.io/npm/v/omni-antigravity-remote-chat?color=cc3534&logo=npm)](https://www.npmjs.com/package/omni-antigravity-remote-chat) [![npm downloads](https://img.shields.io/npm/dm/omni-antigravity-remote-chat?color=blue&logo=npm)](https://www.npmjs.com/package/omni-antigravity-remote-chat) [![Docker](https://img.shields.io/docker/pulls/diegosouzapw/omni-antigravity-remote-chat?color=2496ED&logo=docker&logoColor=white)](https://hub.docker.com/r/diegosouzapw/omni-antigravity-remote-chat)
 
-_Mirror your desktop AI chat on your phone in real-time. Send messages, switch models, manage multiple windows — all from your mobile browser._
+**Mirror your Antigravity (Windsurf) AI chat on your phone in real-time.**
+<br/>
+**Send messages. Switch models. Manage windows. All from your mobile browser.**
+
+[Get Started](#-get-started) · [Screenshots](#-see-it-in-action) · [How It Works](#-how-it-works) · [Docker](https://hub.docker.com/r/diegosouzapw/omni-antigravity-remote-chat) · [npm](https://www.npmjs.com/package/omni-antigravity-remote-chat)
 
 </div>
 
----
+<br/>
 
-## ✨ Why OmniAntigravity?
+## 😤 The Problem
 
-| Benefit                     | Description                                                       |
-| --------------------------- | ----------------------------------------------------------------- |
-| 🛋️ **Code from the couch**  | Read and reply to your AI chat without sitting at your desk       |
-| 🪟 **Multi-window support** | Switch between multiple Antigravity instances from one phone      |
-| 🔄 **Real-time mirror**     | Chat updates appear instantly on your phone via WebSocket         |
-| 📋 **Chat history**         | Browse and resume past conversations from the mobile UI           |
-| 🔒 **Secure**               | Password-protected with HTTPS, cookie sessions, and LAN auto-auth |
-| 🌐 **Access anywhere**      | Use via Wi-Fi (local) or ngrok (internet) with QR code scanning   |
-| ⚡ **One command install**  | `npx omni-antigravity-remote-chat` — no cloning needed            |
+You're deep into an AI-assisted coding session. Claude is generating code, Gemini is reviewing your architecture. Then your phone rings, someone needs you in the kitchen, or you just want to move to the couch.
 
----
+**Your options today:**
 
-## 🚀 Quick Start
+- ❌ Walk back to the desk every time the AI responds
+- ❌ Try to read your monitor from across the room
+- ❌ Copy-paste into a separate mobile app (losing context)
+- ❌ Just... stop coding
 
-### Option A — NPM (Recommended)
+**There has to be a better way.**
 
-```bash
-# Install globally
-npm install -g omni-antigravity-remote-chat
+## ✅ The Solution
 
-# Run anywhere
-omni-chat
-```
-
-> 📦 [View on npmjs.com](https://www.npmjs.com/package/omni-antigravity-remote-chat)
-
-### Option B — npx (No Install)
+OmniAntigravity mirrors your **entire Antigravity AI chat** to your phone — in real-time, with full interaction. Read responses, send follow-up messages, switch AI models, even manage multiple editor windows. All from your mobile browser.
 
 ```bash
 npx omni-antigravity-remote-chat
 ```
 
-### Option C — Docker
+That's it. Open the URL on your phone. You're in. 🚀
+
+---
+
+## 📸 See It in Action
+
+<div align="center">
+
+|                    Main Interface                    |                    Model Selection                     |                     Ready to Chat                     |
+| :--------------------------------------------------: | :----------------------------------------------------: | :---------------------------------------------------: |
+| <img src="assets/screenshot-main.png" width="280" /> | <img src="assets/screenshot-models.png" width="280" /> | <img src="assets/screenshot-input.png" width="280" /> |
+|            Premium dark UI with live sync            |           Switch between Gemini, Claude, GPT           |             Send messages from your phone             |
+
+</div>
+
+---
+
+## ⚡ Get Started
+
+### One command — zero config:
+
+```bash
+npx omni-antigravity-remote-chat
+```
+
+### Or install globally:
+
+```bash
+npm install -g omni-antigravity-remote-chat
+omni-chat
+```
+
+### Or run with Docker:
 
 ```bash
 docker run -d --name omni-chat \
@@ -57,27 +87,30 @@ docker run -d --name omni-chat \
   diegosouzapw/omni-antigravity-remote-chat:latest
 ```
 
-> 🐳 [View on Docker Hub](https://hub.docker.com/r/diegosouzapw/omni-antigravity-remote-chat)
+### Prerequisite
 
-### Option D — Clone Repository
-
-```bash
-git clone https://github.com/diegosouzapw/OmniAntigravityRemoteChat.git
-cd OmniAntigravityRemoteChat
-npm install
-npm start
-```
-
-### Prerequisites
-
-1. **Node.js 22+** — `node --version`
-2. **Antigravity** launched in debug mode:
+Launch Antigravity in debug mode (one-time setup):
 
 ```bash
 antigravity . --remote-debugging-port=7800
 ```
 
-> **Tip:** Add `alias agd='antigravity . --remote-debugging-port=7800'` to your `~/.bashrc` for a quick shortcut.
+> 💡 **Pro tip:** Add `alias agd='antigravity . --remote-debugging-port=7800'` to your `~/.bashrc`
+
+---
+
+## 🏆 Why Developers Choose This
+
+|     | Feature                | Details                                                       |
+| --- | ---------------------- | ------------------------------------------------------------- |
+| 🛋️  | **Code from anywhere** | Read and reply to AI chats from your couch, bed, or kitchen   |
+| 🪟  | **Multi-window**       | Switch between multiple Antigravity instances from one phone  |
+| 🔄  | **Real-time sync**     | < 100ms latency via WebSocket — chat updates appear instantly |
+| 🤖  | **Model switching**    | Toggle between Gemini, Claude, GPT from a mobile dropdown     |
+| 📋  | **Chat history**       | Browse and resume past conversations on mobile                |
+| 🔒  | **Secure by default**  | HTTPS, password auth, cookie sessions, LAN auto-auth          |
+| 🌐  | **Remote access**      | ngrok support with QR code — access from anywhere             |
+| 🐳  | **Docker ready**       | One-liner container deployment                                |
 
 ---
 
@@ -86,22 +119,69 @@ antigravity . --remote-debugging-port=7800
 ```
 ┌─────────────┐    CDP (7800)    ┌──────────────┐    HTTPS/WS (4747)    ┌─────────────┐
 │ Antigravity  │ ◄──────────────► │  Node Server  │ ◄──────────────────► │   Phone      │
-│  (Desktop)   │    snapshot      │  (server.js)  │    mirror + control  │  (Browser)   │
+│  (Desktop)   │    DOM snapshot   │  (server.js)  │    mirror + control  │  (Browser)   │
 └─────────────┘                  └──────────────┘                      └─────────────┘
 ```
 
-The server connects to Antigravity via the **Chrome DevTools Protocol (CDP)**, captures the chat DOM in real-time, and streams it to your phone over WebSocket. You can interact with the chat, switch modes/models, browse history, and manage multiple windows — all from your mobile browser.
+The server connects to Antigravity via the **Chrome DevTools Protocol (CDP)**, captures the chat DOM in real-time, and streams it to your phone over WebSocket. Actions on your phone (sending messages, switching models) are executed back on the desktop via CDP.
+
+**Zero impact on your desktop** — the mirroring is read-only until you interact. No plugins, no extensions, no Antigravity modifications needed.
 
 ---
 
 ## 🪟 Multi-Window Management
 
-One of OmniAntigravity's standout features is the ability to manage **multiple Antigravity instances** from a single phone:
+Manage **multiple Antigravity instances** from a single phone:
 
-- **Window Selector** — Tap the 🖥️ Window button to see all open Antigravity windows
-- **Instant Switching** — Select any window and the chat mirrors it within 2 seconds
-- **Smart Filtering** — Only shows real editor windows (hides internal pages like Settings)
-- **Launch New Windows** — Spawn new Antigravity instances directly from your phone
+- **Window Selector** — Tap 🖥️ to see all open Antigravity windows
+- **Instant Switching** — Select any window, mirrors within 2 seconds
+- **Smart Filtering** — Only shows real editor windows (hides Settings, Launchpad)
+- **Launch Windows** — Spawn new Antigravity instances directly from your phone
+
+---
+
+## 🚀 Launch Modes
+
+| Feature      | Git Clone             | NPM Global                          | Docker           |
+| ------------ | --------------------- | ----------------------------------- | ---------------- |
+| Basic server | `npm start`           | `omni-chat`                         | `docker run ...` |
+| QR code      | `npm run start:local` | `omni-chat` (shows URL)             | —                |
+| ngrok tunnel | `npm run start:web`   | `omni-chat` + `npx ngrok http 4747` | —                |
+| SSL setup    | `npm run setup:ssl`   | Manual with `mkcert`                | Not needed       |
+
+<details>
+<summary>📖 Full launch mode details</summary>
+
+### Git Clone (full control)
+
+```bash
+npm start              # Start server directly
+npm run start:local    # Start with QR code for Wi-Fi access
+npm run start:web      # Start with ngrok tunnel for internet access
+npm run setup:ssl      # Generate trusted HTTPS certificates
+```
+
+### ngrok (Remote Access)
+
+```bash
+# Terminal 1
+omni-chat
+
+# Terminal 2
+npx ngrok http 4747
+```
+
+> **Full ngrok integration** (automatic tunnel + QR code) is available via `npm run start:web` with `NGROK_AUTHTOKEN` in `.env`.
+
+### SSL Setup
+
+```bash
+npm run setup:ssl
+```
+
+Auto-installs [mkcert](https://github.com/FiloSottile/mkcert), creates a local CA, and generates trusted certificates → green padlock 🔒
+
+</details>
 
 ---
 
@@ -111,211 +191,36 @@ One of OmniAntigravity's standout features is the ability to manage **multiple A
 cp .env.example .env
 ```
 
-| Variable       | Default      | Description             |
-| -------------- | ------------ | ----------------------- |
-| `APP_PASSWORD` | _(required)_ | Authentication password |
-| `PORT`         | `4747`       | Server port             |
-
-### Port Reference
-
-| Port     | Purpose                    |          Configurable          |
-| -------- | -------------------------- | :----------------------------: |
-| **7800** | Antigravity CDP debug port | `--remote-debugging-port` flag |
-| **4747** | OmniAntigravity web server |        `PORT` in `.env`        |
-
-> These ports were chosen to avoid conflicts with common services (3000, 5000, 8080, 9000).
+| Variable          | Default      | Description                 |
+| ----------------- | ------------ | --------------------------- |
+| `APP_PASSWORD`    | _(required)_ | Authentication password     |
+| `PORT`            | `4747`       | Server port                 |
+| `NGROK_AUTHTOKEN` | _(optional)_ | For remote access via ngrok |
 
 ---
 
-## 🚀 Launch Modes
+## 🛠️ Troubleshooting
 
-### Git Clone (full control)
-
-When you clone the repo, all launch modes are available via `npm run`:
-
-```bash
-npm start              # Start server directly
-npm run start:local    # Start with QR code for Wi-Fi access
-npm run start:web      # Start with ngrok tunnel for internet access
-npm run setup:ssl      # Generate trusted HTTPS certificates
-```
-
-### NPM Global Install
-
-When installed via `npm install -g`, you get the `omni-chat` command:
-
-```bash
-omni-chat              # Start server (equivalent to npm start)
-```
-
-### ngrok (Remote Access via NPM)
-
-To access from outside your local network using the NPM-installed version:
-
-```bash
-# Terminal 1: Start the server
-omni-chat
-
-# Terminal 2: Start ngrok tunnel
-npx ngrok http 4747
-```
-
-ngrok will give you a public URL like `https://abc123.ngrok.io` — open it on any device.
-
-> **Full ngrok integration** (automatic tunnel + QR code) is available via `npm run start:web` when using the cloned repo with `NGROK_AUTHTOKEN` set in `.env`.
-
-### SSL Setup (NPM Global)
-
-For HTTPS with the NPM-installed version:
-
-```bash
-# Install mkcert (one-time)
-sudo apt install mkcert   # Linux
-brew install mkcert        # macOS
-
-# Generate certificates
-mkcert -install
-OMNI_DIR=$(npm root -g)/omni-antigravity-remote-chat
-mkdir -p $OMNI_DIR/certs
-mkcert -key-file $OMNI_DIR/certs/server.key \
-       -cert-file $OMNI_DIR/certs/server.cert \
-       localhost $(hostname -I | awk '{print $1}')
-```
-
-### Quick Reference
-
-| Feature      | Git Clone             | NPM Global                          |
-| ------------ | --------------------- | ----------------------------------- |
-| Basic server | `npm start`           | `omni-chat`                         |
-| QR code      | `npm run start:local` | `omni-chat` (shows URL)             |
-| ngrok tunnel | `npm run start:web`   | `omni-chat` + `npx ngrok http 4747` |
-| SSL setup    | `npm run setup:ssl`   | Manual with `mkcert`                |
-
----
-
-## 🔒 HTTPS Setup
-
-Get trusted HTTPS with **zero browser warnings** in one command:
-
-```bash
-npm run setup:ssl
-```
-
-This automatically installs [mkcert](https://github.com/FiloSottile/mkcert), creates a local CA, and generates trusted certificates. The server auto-detects them on next start → green padlock 🔒
-
-<details>
-<summary>📱 Mobile Certificate (Optional)</summary>
-
-**Android:** Copy `rootCA.pem` to phone → Settings → Security → Install certificate
-
-**iOS:** Transfer `rootCA.pem` → Settings → Profile Downloaded → Install → Certificate Trust Settings → Enable
-
-</details>
-
----
-
-## 🎨 Features
-
-### Core
-
-- 📱 **Mobile Remote Control** — Send messages, switch modes/models from your phone
-- 🔄 **Real-time Sync** — Chat mirrors from desktop to phone automatically
-- 📑 **All Sections Expanded** — No collapsing, everything visible at once
-- 🛡️ **Smart Scroll Lock** — 15s protection so buttons don't jump away from your finger
-
-### Multi-Window (v0.4.0+)
-
-- 🪟 **Window Selector** — Switch between multiple Antigravity instances
-- 🚀 **Launch Windows** — Spawn new Antigravity instances from your phone
-- 🔄 **Robust Switching** — Retry logic with progress indicator during target change
-
-### Chat Management
-
-- 📋 **Chat History** — Browse and resume past conversations
-- ➕ **New Conversations** — Start fresh chats from mobile
-- ⏹️ **Stop Generation** — Halt AI responses immediately
-
-### Infrastructure
-
-- 🔁 **Auto-Reconnect** — Exponential backoff (2s→30s) with toast notifications
-- 🔒 **Security** — Password auth, HTTPS, cookie sessions, LAN auto-auth
-- 📟 **QR Code** — Scan to connect instantly from phone
-- 🌐 **ngrok Support** — Access from anywhere via web tunnel
-
----
-
-## 📦 npm Scripts
-
-```bash
-npm start             # Start server directly
-npm run start:local   # Launch with QR code (Wi-Fi mode)
-npm run start:web     # Launch with ngrok (internet mode)
-npm run setup:ssl     # Generate trusted HTTPS certificates
-npm test              # Run validation test suite (25 checks)
-```
-
----
-
-## ✅ Validation Tests
-
-```bash
-npm test
-```
-
-Checks Node.js version, dependencies, syntax, port availability, CDP connectivity, HTTP endpoints, and WebSocket connection.
+| Issue               | Solution                                                     |
+| ------------------- | ------------------------------------------------------------ |
+| "CDP not found"     | Launch Antigravity with `--remote-debugging-port=7800`       |
+| "EADDRINUSE"        | Change `PORT` in `.env`, or stop the process using that port |
+| Phone can't connect | Ensure same Wi-Fi network and check firewall                 |
+| "Syncing..." stuck  | Wait 2-3s for CDP contexts to populate after window switch   |
 
 ---
 
 ## 📁 Project Structure
 
 ```
-├── src/
-│   ├── server.js          # Main server (Express + WebSocket + CDP)
-│   └── ui_inspector.js    # UI inspection utilities
-├── public/
-│   ├── index.html         # Mobile chat interface
-│   ├── login.html         # Login page
-│   ├── css/style.css      # Premium dark UI styles
-│   └── js/app.js          # Client-side logic
-├── scripts/
-│   ├── start.sh / .bat    # Local launcher
-│   ├── start_web.sh / .bat # Web (ngrok) launcher
-│   ├── generate_ssl.js    # SSL certificate generator
-│   └── setup-ssl.js       # Automated mkcert setup
-├── docs/
-│   ├── CODE_DOCUMENTATION.md  # Technical reference
-│   ├── DESIGN_PHILOSOPHY.md   # Architecture rationale
-│   └── RELEASE_NOTES.md       # Version history
-├── launcher.js            # Node.js launcher (QR, ngrok)
-├── test.js                # Validation test suite
-├── package.json           # Dependencies and scripts
-└── .env.example           # Environment template
+├── src/server.js          # Main server (Express + WS + CDP)
+├── public/                # Mobile chat interface
+├── launcher.js            # QR code + ngrok launcher
+├── scripts/               # SSL, context menu installers
+├── test/                  # Validation test suite
+├── Dockerfile             # Docker support
+└── .github/workflows/     # CI + auto-release + Docker Hub
 ```
-
----
-
-## 🛠️ Troubleshooting
-
-| Issue               | Solution                                                        |
-| ------------------- | --------------------------------------------------------------- |
-| "CDP not found"     | Launch Antigravity with `agd` or `--remote-debugging-port=7800` |
-| "EADDRINUSE"        | Change `PORT` in `.env`, or stop the process using that port    |
-| Phone can't connect | Ensure same Wi-Fi network and check firewall                    |
-| "Unauthorized"      | Clear browser cookies and re-enter password                     |
-| Empty chat history  | Ensure a chat is open in Antigravity, then refresh              |
-| "Syncing..." stuck  | Wait 2-3s for CDP contexts to populate after window switch      |
-
----
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ---
 
@@ -331,9 +236,21 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ---
 
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+---
+
 ## 🙏 Acknowledgments
 
-Special thanks to **[Krishna Kanth B](https://github.com/krishnakanthb13)** — the original creator of the Windsurf mobile chat concept that inspired this project. OmniAntigravity Remote Chat builds upon that foundation with a complete rewrite, multi-window management, robust CDP context handling, NPM packaging, and a premium mobile-first UI.
+Special thanks to **[Krishna Kanth B](https://github.com/krishnakanthb13)** — the original creator of the Windsurf mobile chat concept that inspired this project. OmniAntigravity builds upon that foundation with multi-window management, robust CDP handling, NPM/Docker packaging, and a premium mobile-first UI.
 
 ---
 
