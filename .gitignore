@@ -35,3 +35,7 @@ certs/
 
 # Registry
 registry/
+
+# Private docs (marketing, launch plans)
+docs/REDDIT_*
+docs/LAUNCH_*
