@@ -1,305 +1,61 @@
 #!/usr/bin/env node
+// @ts-check
+/**
+ * OmniAntigravity Remote Chat — Main Server
+ * Mobile remote control for AI coding sessions via CDP mirroring.
+ *
+ * @module server
+ */
 import dotenv from 'dotenv';
-import { fileURLToPath as _fu } from 'url';
-import { dirname as _dn, join as _jn } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
 // Load .env from the package's own directory (not the cwd where npx runs)
-const _ownDir = _dn(_dn(_fu(import.meta.url)));
-const _ownEnv = _jn(_ownDir, '.env');
+const _ownDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const _ownEnv = join(_ownDir, '.env');
 import fs from 'fs';
 if (fs.existsSync(_ownEnv)) {
     dotenv.config({ path: _ownEnv });
 } else {
     dotenv.config(); // fallback to cwd
 }
+
 import express from 'express';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import https from 'https';
-
-import os from 'os';
 import WebSocket from 'ws';
 
-import { inspectUI } from './ui_inspector.js';
-import { execSync, spawn } from 'child_process';
+// ─── Module Imports ─────────────────────────────────────────────────
+import {
+    PROJECT_ROOT, PORTS, CONTAINER_IDS, SERVER_PORT, POLL_INTERVAL,
+    APP_PASSWORD, COOKIE_SECRET, AUTH_SALT, AUTH_COOKIE_NAME, VERSION
+} from './config.js';
+import * as state from './state.js';
+import { getLocalIP, isLocalRequest, getJson } from './utils/network.js';
+import { killPortProcess, launchAntigravity } from './utils/process.js';
+import { hashString } from './utils/hash.js';
+import { discoverCDP, discoverAllCDP, connectCDP, initCDP } from './cdp/connection.js';
 
-const __filename = _fu(import.meta.url);
-const __dirname = _dn(__filename);
-const PROJECT_ROOT = _jn(__dirname, '..');
-
-const PORTS = [7800, 7801, 7802, 7803];
-const POLL_INTERVAL = 1000; // 1 second
-const SERVER_PORT = process.env.PORT || 4747;
-const APP_PASSWORD = process.env.APP_PASSWORD || 'antigravity';
-const COOKIE_SECRET = process.env.COOKIE_SECRET || 'antigravity_secret_key_1337';
-const AUTH_SALT = process.env.AUTH_SALT || '';
-const AUTH_COOKIE_NAME = 'omni_ag_auth';
-// Note: hashString is defined later, so we'll initialize the token inside createServer or use a simple string for now.
-let AUTH_TOKEN = 'ag_default_token';
-
-
-// Shared CDP connection
+// ─── Mutable State (local aliases — will be managed by state module in future) ──
 let cdpConnection = null;
 let lastSnapshot = null;
 let lastSnapshotHash = null;
-let availableTargets = []; // Multi-window: all discovered targets
-let activeTargetId = null; // Currently connected target identifier
+let availableTargets = [];
+let activeTargetId = null;
+let AUTH_TOKEN = 'ag_default_token';
 
-// Kill any existing process on the server port (prevents EADDRINUSE)
-function killPortProcess(port) {
-    try {
-        if (process.platform === 'win32') {
-            // Windows: Find PID using netstat and kill it
-            const result = execSync(`netstat -ano | findstr :${port} | findstr LISTENING`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
-            const lines = result.trim().split('\n');
-            const pids = new Set();
-            for (const line of lines) {
-                const parts = line.trim().split(/\s+/);
-                const pid = parts[parts.length - 1];
-                if (pid && pid !== '0') pids.add(pid);
-            }
-            for (const pid of pids) {
-                try {
-                    execSync(`taskkill /PID ${pid} /F`, { stdio: 'pipe' });
-                    console.log(`⚠️  Killed existing process on port ${port} (PID: ${pid})`);
-                } catch (e) { /* Process may have already exited */ }
-            }
-        } else {
-            // Linux/macOS: Use lsof and kill
-            const result = execSync(`lsof -ti:${port}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
-            const pids = result.trim().split('\n').filter(p => p);
-            for (const pid of pids) {
-                try {
-                    execSync(`kill -9 ${pid}`, { stdio: 'pipe' });
-                    console.log(`⚠️  Killed existing process on port ${port} (PID: ${pid})`);
-                } catch (e) { /* Process may have already exited */ }
-            }
-        }
-        // Small delay to let the port be released
-        return new Promise(resolve => setTimeout(resolve, 500));
-    } catch (e) {
-        // No process found on port - this is fine
-        return Promise.resolve();
-    }
-}
+import { inspectUI } from './ui_inspector.js';
 
-// Check if a specific port is in use
-async function isPortFree(port) {
-    return new Promise((resolve) => {
-        const server = http.createServer();
-        server.once('error', (err) => {
-            if (err.code === 'EADDRINUSE') resolve(false);
-            else resolve(true);
-        });
-        server.once('listening', () => {
-            server.close();
-            resolve(true);
-        });
-        server.listen(port);
-    });
-}
+// ─── CDP Action Functions ───────────────────────────────────────────
+// These functions contain large template-literal scripts injected into
+// the browser via CDP Runtime.evaluate. They stay in this file because
+// the template strings reference interpolated variables from their
+// closure scope, making extraction fragile.
 
-// Launch a new Antigravity instance on the next available port
-async function launchAntigravity() {
-    console.log('🚀 Attempting to launch a new Antigravity window...');
-    
-    // Antigravity core base port starts above 7800
-    let targetPort = null;
-    for (let port = 7800; port <= 7850; port++) {
-        const free = await isPortFree(port);
-        if (free) {
-            targetPort = port;
-            break;
-        }
-    }
-    
-    if (!targetPort) {
-        throw new Error("Could not find a free port between 7800-7850 to launch Antigravity");
-    }
-
-    if (!PORTS.includes(targetPort)) {
-        PORTS.push(targetPort);
-    }
-    
-    console.log(`Starting antigravity on port ${targetPort}...`);
-    // Use spawn to start antigravity detached
-    const subprocess = spawn('antigravity', [`--port=${targetPort}`], {
-        detached: true,
-        stdio: 'ignore' // We don't need its stdout
-    });
-    
-    subprocess.unref(); // Allow the parent Node process to exit independently
-    
-    // Give it a moment to boot up before returning
-    await new Promise(r => setTimeout(r, 2500));
-    return targetPort;
-}
-
-// Get local IP address for mobile access
-// Prefers real network IPs (192.168.x.x, 10.x.x.x) over virtual adapters (172.x.x.x from WSL/Docker)
-function getLocalIP() {
-    const interfaces = os.networkInterfaces();
-    const candidates = [];
-
-    for (const name of Object.keys(interfaces)) {
-        for (const iface of interfaces[name]) {
-            // Skip internal and non-IPv4 addresses
-            if (iface.family === 'IPv4' && !iface.internal) {
-                candidates.push({
-                    address: iface.address,
-                    name: name,
-                    // Prioritize common home/office network ranges
-                    priority: iface.address.startsWith('192.168.') ? 1 :
-                        iface.address.startsWith('10.') ? 2 :
-                            iface.address.startsWith('172.') ? 3 : 4
-                });
-            }
-        }
-    }
-
-    // Sort by priority and return the best one
-    candidates.sort((a, b) => a.priority - b.priority);
-    return candidates.length > 0 ? candidates[0].address : 'localhost';
-}
-
-// Helper: HTTP GET JSON
-function getJson(url) {
-    return new Promise((resolve, reject) => {
-        http.get(url, (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-                try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
-            });
-        }).on('error', reject);
-    });
-}
-
-// Find Antigravity CDP endpoint
-// Find Antigravity CDP endpoint
-async function discoverCDP() {
-    const errors = [];
-    for (const port of PORTS) {
-        try {
-            const list = await getJson(`http://127.0.0.1:${port}/json/list`);
-
-            // Priority 1: Standard Workbench (The main window)
-            const workbench = list.find(t => t.url?.includes('workbench.html') || (t.title && t.title.includes('workbench')));
-            if (workbench && workbench.webSocketDebuggerUrl) {
-                console.log('Found Workbench target:', workbench.title);
-                return { port, url: workbench.webSocketDebuggerUrl };
-            }
-
-            // Priority 2: Jetski/Launchpad (Fallback)
-            const jetski = list.find(t => t.url?.includes('jetski') || t.title === 'Launchpad');
-            if (jetski && jetski.webSocketDebuggerUrl) {
-                console.log('Found Jetski/Launchpad target:', jetski.title);
-                return { port, url: jetski.webSocketDebuggerUrl };
-            }
-        } catch (e) {
-            errors.push(`${port}: ${e.message}`);
-        }
-    }
-    const errorSummary = errors.length ? `Errors: ${errors.join(', ')}` : 'No ports responding';
-    throw new Error(`CDP not found. ${errorSummary}`);
-}
-
-// Discover ALL available CDP targets across all ports (multi-window)
-// Only includes real editor workbench windows (excludes Settings, Launchpad, etc.)
-async function discoverAllCDP() {
-    const allTargets = [];
-    // Internal pages that don't have chat capability
-    const EXCLUDED_TITLES = ['launchpad', 'settings'];
-    for (const port of PORTS) {
-        try {
-            const list = await getJson(`http://127.0.0.1:${port}/json/list`);
-            for (const t of list) {
-                if (!t.webSocketDebuggerUrl) continue;
-
-                // Only include standard workbench pages (editor windows)
-                const isWorkbench = t.url?.includes('workbench.html') && !t.url?.includes('jetski');
-                if (!isWorkbench) continue;
-
-                // Skip internal pages (Settings, Launchpad, etc.)
-                const titleLower = (t.title || '').toLowerCase();
-                if (EXCLUDED_TITLES.some(ex => titleLower === ex)) continue;
-
-                allTargets.push({
-                    id: `${port}:${t.id}`,
-                    port,
-                    title: t.title || 'Untitled',
-                    url: t.url,
-                    wsUrl: t.webSocketDebuggerUrl,
-                    type: 'workbench'
-                });
-            }
-        } catch (e) { /* port not responding */ }
-    }
-    return allTargets;
-}
-
-// Connect to CDP
-async function connectCDP(url) {
-    const ws = new WebSocket(url);
-    await new Promise((resolve, reject) => {
-        ws.on('open', resolve);
-        ws.on('error', reject);
-    });
-
-    let idCounter = 1;
-    const pendingCalls = new Map(); // Track pending calls by ID
-    const contexts = [];
-    const CDP_CALL_TIMEOUT = 30000; // 30 seconds timeout
-
-    // Single centralized message handler (fixes MaxListenersExceeded warning)
-    ws.on('message', (msg) => {
-        try {
-            const data = JSON.parse(msg);
-
-            // Handle CDP method responses
-            if (data.id !== undefined && pendingCalls.has(data.id)) {
-                const { resolve, reject, timeoutId } = pendingCalls.get(data.id);
-                clearTimeout(timeoutId);
-                pendingCalls.delete(data.id);
-
-                if (data.error) reject(data.error);
-                else resolve(data.result);
-            }
-
-            // Handle execution context events
-            if (data.method === 'Runtime.executionContextCreated') {
-                contexts.push(data.params.context);
-            } else if (data.method === 'Runtime.executionContextDestroyed') {
-                const id = data.params.executionContextId;
-                const idx = contexts.findIndex(c => c.id === id);
-                if (idx !== -1) contexts.splice(idx, 1);
-            } else if (data.method === 'Runtime.executionContextsCleared') {
-                contexts.length = 0;
-            }
-        } catch (e) { }
-    });
-
-    const call = (method, params) => new Promise((resolve, reject) => {
-        const id = idCounter++;
-
-        // Setup timeout to prevent memory leaks from never-resolved calls
-        const timeoutId = setTimeout(() => {
-            if (pendingCalls.has(id)) {
-                pendingCalls.delete(id);
-                reject(new Error(`CDP call ${method} timed out after ${CDP_CALL_TIMEOUT}ms`));
-            }
-        }, CDP_CALL_TIMEOUT);
-
-        pendingCalls.set(id, { resolve, reject, timeoutId });
-        ws.send(JSON.stringify({ id, method, params }));
-    });
-
-    await call("Runtime.enable", {});
-    await new Promise(r => setTimeout(r, 1000));
-
-    return { ws, call, contexts };
-}
+// (connectCDP moved to src/cdp/connection.js)
 
 // Capture chat snapshot
 async function captureSnapshot(cdp) {
@@ -1416,51 +1172,9 @@ async function getAppState(cdp) {
     return { error: 'Context failed' };
 }
 
-// Simple hash function
-function hashString(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
-        hash = hash & hash;
-    }
-    return hash.toString(36);
-}
-
-// Check if a request is from the same Wi-Fi (internal network)
-function isLocalRequest(req) {
-    // 1. Check for proxy headers (Cloudflare, ngrok, etc.)
-    // If these exist, the request is coming via an external tunnel/proxy
-    if (req.headers['x-forwarded-for'] || req.headers['x-forwarded-host'] || req.headers['x-real-ip']) {
-        return false;
-    }
-
-    // 2. Check the remote IP address
-    const ip = req.ip || req.socket.remoteAddress || '';
-
-    // Standard local/private IPv4 and IPv6 ranges
-    return ip === '127.0.0.1' ||
-        ip === '::1' ||
-        ip === '::ffff:127.0.0.1' ||
-        ip.startsWith('192.168.') ||
-        ip.startsWith('10.') ||
-        ip.startsWith('172.16.') || ip.startsWith('172.17.') ||
-        ip.startsWith('172.18.') || ip.startsWith('172.19.') ||
-        ip.startsWith('172.2') || ip.startsWith('172.3') ||
-        ip.startsWith('::ffff:192.168.') ||
-        ip.startsWith('::ffff:10.');
-}
-
-// Initialize CDP connection
-async function initCDP() {
-    console.log('🔍 Discovering Antigravity CDP endpoint...');
-    const cdpInfo = await discoverCDP();
-    console.log(`✅ Found Antigravity on port ${cdpInfo.port} `);
-
-    console.log('🔌 Connecting to CDP...');
-    cdpConnection = await connectCDP(cdpInfo.url);
-    console.log(`✅ Connected! Found ${cdpConnection.contexts.length} execution contexts\n`);
-}
+// hashString → src/utils/hash.js
+// isLocalRequest → src/utils/network.js
+// initCDP → src/cdp/connection.js
 
 // Background polling with exponential backoff & CDP status broadcast
 async function startPolling(wss) {
@@ -1573,8 +1287,8 @@ async function createServer() {
     const app = express();
 
     // Check for SSL certificates
-    const keyPath = _jn(PROJECT_ROOT, 'certs', 'server.key');
-    const certPath = _jn(PROJECT_ROOT, 'certs', 'server.cert');
+    const keyPath = join(PROJECT_ROOT, 'certs', 'server.key');
+    const certPath = join(PROJECT_ROOT, 'certs', 'server.cert');
     const hasSSL = fs.existsSync(keyPath) && fs.existsSync(certPath);
 
     let server;
@@ -1653,7 +1367,7 @@ async function createServer() {
         }
     });
 
-    app.use(express.static(_jn(PROJECT_ROOT, 'public')));
+    app.use(express.static(join(PROJECT_ROOT, 'public')));
 
     // Login endpoint
     app.post('/login', (req, res) => {
@@ -1698,8 +1412,8 @@ async function createServer() {
 
     // SSL status endpoint
     app.get('/ssl-status', (req, res) => {
-        const keyPath = _jn(PROJECT_ROOT, 'certs', 'server.key');
-        const certPath = _jn(PROJECT_ROOT, 'certs', 'server.cert');
+        const keyPath = join(PROJECT_ROOT, 'certs', 'server.key');
+        const certPath = join(PROJECT_ROOT, 'certs', 'server.cert');
         const certsExist = fs.existsSync(keyPath) && fs.existsSync(certPath);
         res.json({
             enabled: hasSSL,
@@ -2147,7 +1861,7 @@ async function main() {
         const protocol = hasSSL ? 'https' : 'http';
         server.listen(SERVER_PORT, '0.0.0.0', () => {
             const url = `${protocol}://${localIP}:${SERVER_PORT}`;
-            const ver = '0.5.1';
+            const ver = VERSION;
 
             // ANSI 256-color helpers
             const R  = '\x1b[0m';

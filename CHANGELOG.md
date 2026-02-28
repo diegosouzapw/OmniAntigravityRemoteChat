@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-02-28
+
+### Changed
+
+- ♻️ Architecture refactoring — extracted `config.js`, `state.js`, `utils/`, `cdp/connection.js` from monolithic `server.js`
+- 📝 JSDoc typing added to all new modules (`// @ts-check` + full `@param`/`@returns` annotations)
+- 🧹 Replaced cryptic import aliases (`_fu`, `_dn`, `_jn`) with full names (`fileURLToPath`, `dirname`, `join`)
+- 🔧 Version now managed from single source of truth (`config.js` → `VERSION`)
+
 ## [0.5.1] - 2026-02-28
 
 ### Added
