@@ -5,14 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.2] - 2026-02-28
+## [0.5.3] - 2026-02-28
 
 ### Changed
 
 - ♻️ Architecture refactoring — extracted `config.js`, `state.js`, `utils/`, `cdp/connection.js` from monolithic `server.js`
-- 📝 JSDoc typing added to all new modules (`// @ts-check` + full `@param`/`@returns` annotations)
+- 📝 JSDoc typing added to all modules: 13 CDP functions, 6 state vars, `launcher.js`, `app.js` header
 - 🧹 Replaced cryptic import aliases (`_fu`, `_dn`, `_jn`) with full names (`fileURLToPath`, `dirname`, `join`)
 - 🔧 Version now managed from single source of truth (`config.js` → `VERSION`)
+- 📚 Updated README Project Structure, Configuration table (+COOKIE_SECRET, +AUTH_SALT)
+- 📚 Updated CODE_DOCUMENTATION.md with modular architecture (config, state, utils, cdp sections)
+- 🚀 `launcher.js` refactored: removed duplicate `getLocalIP()`, imports from `utils/network.js`
 
 ## [0.5.1] - 2026-02-28
 

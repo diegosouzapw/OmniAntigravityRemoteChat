@@ -41,4 +41,4 @@ export const AUTH_COOKIE_NAME = 'omni_ag_auth';
 
 // ─── Version ────────────────────────────────────────────────────────
 
-export const VERSION = '0.5.2';
+export const VERSION = '0.5.3';
