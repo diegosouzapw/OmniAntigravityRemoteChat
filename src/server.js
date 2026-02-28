@@ -32,6 +32,8 @@ const PORTS = [7800, 7801, 7802, 7803];
 const POLL_INTERVAL = 1000; // 1 second
 const SERVER_PORT = process.env.PORT || 4747;
 const APP_PASSWORD = process.env.APP_PASSWORD || 'antigravity';
+const COOKIE_SECRET = process.env.COOKIE_SECRET || 'antigravity_secret_key_1337';
+const AUTH_SALT = process.env.AUTH_SALT || '';
 const AUTH_COOKIE_NAME = 'omni_ag_auth';
 // Note: hashString is defined later, so we'll initialize the token inside createServer or use a simple string for now.
 let AUTH_TOKEN = 'ag_default_token';
@@ -302,7 +304,13 @@ async function connectCDP(url) {
 // Capture chat snapshot
 async function captureSnapshot(cdp) {
     const CAPTURE_SCRIPT = `(() => {
-        const cascade = document.getElementById('conversation') || document.getElementById('chat') || document.getElementById('cascade');
+        // Smart container detection: try multiple IDs with fallback chain
+        const CONTAINER_IDS = ['cascade', 'conversation', 'chat'];
+        let cascade = null;
+        for (const id of CONTAINER_IDS) {
+            cascade = document.getElementById(id);
+            if (cascade) break;
+        }
         if (!cascade) {
             // Debug info
             const body = document.body;
@@ -360,13 +368,39 @@ async function captureSnapshot(cdp) {
                 try {
                     const text = (el.innerText || '').toLowerCase();
                     if (text.includes('review changes') || text.includes('files with changes') || text.includes('context found')) {
-                        // If it's a small structural element or has buttons, it's likely a bar
                         if (el.children.length < 10 || el.querySelector('button') || el.classList?.contains('justify-between')) {
-                            el.style.display = 'none'; // Use both hide and remove
+                            el.style.display = 'none';
                             el.remove();
                         }
                     }
                 } catch (e) {}
+            });
+
+            // 3. Base64 image conversion — convert local SVGs/images to data URIs
+            //    This prevents broken images when accessing via ngrok/remote
+            clone.querySelectorAll('img[src], svg').forEach(el => {
+                try {
+                    if (el.tagName === 'SVG') {
+                        const svgData = new XMLSerializer().serializeToString(el);
+                        const img = document.createElement('img');
+                        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+                        img.style.cssText = el.style.cssText || '';
+                        img.width = el.getAttribute('width') || el.clientWidth || 16;
+                        img.height = el.getAttribute('height') || el.clientHeight || 16;
+                        img.className = el.className?.baseVal || '';
+                        el.replaceWith(img);
+                    } else if (el.src && !el.src.startsWith('data:') && !el.src.startsWith('http')) {
+                        // Local file references — try canvas conversion
+                        try {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = el.naturalWidth || el.width || 16;
+                            canvas.height = el.naturalHeight || el.height || 16;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(el, 0, 0);
+                            el.src = canvas.toDataURL('image/png');
+                        } catch(canvasErr) {}
+                    }
+                } catch(imgErr) {}
             });
         } catch (globalErr) { }
         
@@ -624,26 +658,54 @@ async function stopGeneration(cdp) {
 
 // Click Element (Remote)
 async function clickElement(cdp, { selector, index, textContent }) {
+    // Deterministic targeting with occurrence index tracking and leaf-node filtering
+    const safeTextContent = textContent ? JSON.stringify(textContent) : 'null';
     const EXP = `(async () => {
         try {
-            // Strategy: Find all elements matching the selector
-            // If textContent is provided, filter by that too for safety
-            let elements = Array.from(document.querySelectorAll('${selector}'));
+            const searchText = ${safeTextContent};
             
-            if ('${textContent}') {
-                elements = elements.filter(el => el.textContent.includes('${textContent}'));
+            // 1. Scope search to active chat containers for precision
+            const CONTAINER_IDS = ['cascade', 'conversation', 'chat'];
+            let scope = null;
+            for (const id of CONTAINER_IDS) {
+                scope = document.getElementById(id);
+                if (scope) break;
+            }
+            if (!scope) scope = document.body;
+            
+            // 2. Find all matching elements within the scoped container
+            let elements = Array.from(scope.querySelectorAll('${selector}'));
+            
+            // 3. Text-based filtering with first-line matching for precision
+            if (searchText) {
+                elements = elements.filter(el => {
+                    const elText = el.textContent || '';
+                    // First try exact first-line match (best for "Thought for 3s" etc.)
+                    const firstLine = elText.split('\\n')[0].trim();
+                    if (firstLine === searchText) return true;
+                    // Fallback to includes
+                    return elText.includes(searchText);
+                });
+            }
+            
+            // 4. Leaf-most filtering: prefer inner-most clickable element
+            //    Prevents "Nested DOM Traps" where clicks land on parent containers
+            if (elements.length > 1) {
+                elements = elements.filter(el => {
+                    // Check if any other match is a child of this element
+                    return !elements.some(other => other !== el && el.contains(other));
+                });
             }
 
+            // 5. Use occurrence index for deterministic targeting 
             const target = elements[${index}];
 
             if (target) {
                 target.click();
-                // Also try clicking the parent if the target is just a label
-                // target.parentElement?.click(); 
-                return { success: true };
+                return { success: true, matchCount: elements.length, index: ${index} };
             }
             
-            return { error: 'Element not found at index ${index}' };
+            return { error: 'Element not found at index ${index}', candidates: elements.length };
         } catch(e) {
             return { error: e.toString() };
         }
@@ -1532,7 +1594,7 @@ async function createServer() {
     const wss = new WebSocketServer({ server });
 
     // Initialize session security & token
-    AUTH_TOKEN = hashString(APP_PASSWORD + Date.now().toString());
+    AUTH_TOKEN = hashString(APP_PASSWORD + AUTH_SALT + Date.now().toString());
 
     // Check for --launch argument
     if (process.argv.includes('--launch')) {
@@ -1546,7 +1608,7 @@ async function createServer() {
 
     app.use(compression());
     app.use(express.json());
-    app.use(cookieParser('antigravity_secret_key_1337'));
+    app.use(cookieParser(COOKIE_SECRET));
 
     // Ngrok Bypass Middleware
     app.use((req, res, next) => {
@@ -1937,7 +1999,7 @@ async function createServer() {
         if (isLocalRequest(req)) {
             isAuthenticated = true;
         } else if (signedToken) {
-            const token = cookieParser.signedCookie(signedToken, 'antigravity_secret_key_1337');
+            const token = cookieParser.signedCookie(signedToken, COOKIE_SECRET);
             if (token === AUTH_TOKEN) {
                 isAuthenticated = true;
             }
@@ -2085,7 +2147,7 @@ async function main() {
         const protocol = hasSSL ? 'https' : 'http';
         server.listen(SERVER_PORT, '0.0.0.0', () => {
             const url = `${protocol}://${localIP}:${SERVER_PORT}`;
-            const ver = '0.5.0';
+            const ver = '0.5.1';
 
             // ANSI 256-color helpers
             const R  = '\x1b[0m';

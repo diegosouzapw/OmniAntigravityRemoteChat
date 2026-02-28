@@ -1,6 +1,6 @@
 {
     "name": "omni-antigravity-remote-chat",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "type": "module",
     "description": "Premium mobile remote control for Antigravity AI sessions via CDP mirroring — multi-window, chat history, real-time sync",
     "keywords": [

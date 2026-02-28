@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-02-28
+
+### Added
+
+- 🖼️ Base64 image conversion — SVGs/icons now converted to data URIs in snapshots, fixing broken images via ngrok
+- 🎯 Deterministic click targeting — occurrence index tracking + leaf-node filtering for precise button clicks
+- 🔍 Smart container detection — priority fallback chain (`#cascade` → `#conversation` → `#chat`) for compatibility
+- 💎 Glassmorphism quick-action pills — `backdrop-filter: blur(12px)`, violet glow on hover, micro-animations
+- 💡 "Explain" quick-action pill — one-tap code explanation alongside Continue/Fix Bugs/Create Docs
+- 🔐 Cookie secret externalization — `COOKIE_SECRET` and `AUTH_SALT` configurable via `.env`
+
 ## [0.5.0] - 2026-02-22
 
 ### Added
