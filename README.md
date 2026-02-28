@@ -101,16 +101,17 @@ antigravity . --remote-debugging-port=7800
 
 ## 🏆 Why Developers Choose This
 
-|     | Feature                | Details                                                       |
-| --- | ---------------------- | ------------------------------------------------------------- |
-| 🛋️  | **Code from anywhere** | Read and reply to AI chats from your couch, bed, or kitchen   |
-| 🪟  | **Multi-window**       | Switch between multiple Antigravity instances from one phone  |
-| 🔄  | **Real-time sync**     | < 100ms latency via WebSocket — chat updates appear instantly |
-| 🤖  | **Model switching**    | Toggle between Gemini, Claude, GPT from a mobile dropdown     |
-| 📋  | **Chat history**       | Browse and resume past conversations on mobile                |
-| 🔒  | **Secure by default**  | HTTPS, password auth, cookie sessions, LAN auto-auth          |
-| 🌐  | **Remote access**      | ngrok support with QR code — access from anywhere             |
-| 🐳  | **Docker ready**       | One-liner container deployment                                |
+|     | Feature                | Details                                                                  |
+| --- | ---------------------- | ------------------------------------------------------------------------ |
+| 🛋️  | **Code from anywhere** | Read and reply to AI chats from your couch, bed, or kitchen              |
+| 🪟  | **Multi-window**       | Switch between multiple Antigravity instances from one phone             |
+| 🔄  | **Real-time sync**     | < 100ms latency via WebSocket — chat updates appear instantly            |
+| 🤖  | **Model switching**    | Toggle between Gemini, Claude, GPT from a mobile dropdown                |
+| 📋  | **Chat history**       | Browse and resume past conversations on mobile                           |
+| 🔒  | **Secure by default**  | HTTPS, password auth, cookie sessions, LAN auto-auth                     |
+| 🌐  | **Remote access**      | ngrok support with QR code — access from anywhere                        |
+| 🐳  | **Docker ready**       | One-liner container deployment                                           |
+| ♻️  | **Modular codebase**   | Clean architecture with JSDoc typing (`config`, `state`, `utils`, `cdp`) |
 
 ---
 
@@ -191,11 +192,13 @@ Auto-installs [mkcert](https://github.com/FiloSottile/mkcert), creates a local C
 cp .env.example .env
 ```
 
-| Variable          | Default      | Description                 |
-| ----------------- | ------------ | --------------------------- |
-| `APP_PASSWORD`    | _(required)_ | Authentication password     |
-| `PORT`            | `4747`       | Server port                 |
-| `NGROK_AUTHTOKEN` | _(optional)_ | For remote access via ngrok |
+| Variable          | Default            | Description                     |
+| ----------------- | ------------------ | ------------------------------- |
+| `APP_PASSWORD`    | `antigravity`      | Authentication password         |
+| `PORT`            | `4747`             | Server port                     |
+| `COOKIE_SECRET`   | _(auto-generated)_ | Secret for cookie signing       |
+| `AUTH_SALT`       | _(auto-generated)_ | Additional salt for auth tokens |
+| `NGROK_AUTHTOKEN` | _(optional)_       | For remote access via ngrok     |
 
 ---
 
@@ -213,13 +216,22 @@ cp .env.example .env
 ## 📁 Project Structure
 
 ```
-├── src/server.js          # Main server (Express + WS + CDP)
-├── public/                # Mobile chat interface
-├── launcher.js            # QR code + ngrok launcher
-├── scripts/               # SSL, context menu installers
-├── test/                  # Validation test suite
-├── Dockerfile             # Docker support
-└── .github/workflows/     # CI + auto-release + Docker Hub
+├── src/
+│   ├── server.js              # Main server (Express + WS + CDP actions)
+│   ├── config.js              # Constants, env vars, container IDs
+│   ├── state.js               # Shared state + JSDoc type definitions
+│   ├── cdp/
+│   │   └── connection.js      # CDP discovery & connection
+│   └── utils/
+│       ├── network.js         # getLocalIP, isLocalRequest, getJson
+│       ├── process.js         # killPortProcess, launchAntigravity
+│       └── hash.js            # Hash utility
+├── public/                    # Mobile chat interface
+├── launcher.js                # QR code + ngrok launcher
+├── scripts/                   # SSL, context menu installers
+├── test/                      # Validation test suite
+├── Dockerfile                 # Docker support
+└── .github/workflows/         # CI + auto-release + Docker Hub
 ```
 
 ---

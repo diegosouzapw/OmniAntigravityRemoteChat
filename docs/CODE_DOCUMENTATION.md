@@ -1,12 +1,20 @@
-# CODE DOCUMENTATION — OmniAntigravity Remote Chat v0.4.6
+# CODE DOCUMENTATION — OmniAntigravity Remote Chat v0.5.2
 
 ## Project Structure
 
 ```text
 omni-antigravity-remote-chat/
 ├── src/
-│   ├── server.js                   # Main Node.js server (Express + WebSocket + CDP + HTTPS)
-│   └── ui_inspector.js             # Utility for inspecting Antigravity UI via CDP
+│   ├── server.js                   # Main server (Express + WS + CDP actions)
+│   ├── config.js                   # Constants, env vars, container IDs
+│   ├── state.js                    # Shared mutable state + JSDoc typedefs
+│   ├── ui_inspector.js             # Utility for inspecting Antigravity UI via CDP
+│   ├── cdp/
+│   │   └── connection.js           # CDP discovery, connect, init (discoverCDP, connectCDP)
+│   └── utils/
+│       ├── network.js             # getLocalIP, isLocalRequest, getJson
+│       ├── process.js             # killPortProcess, isPortFree, launchAntigravity
+│       └── hash.js                # hashString utility
 ├── public/
 │   ├── index.html                  # Mobile-optimized web frontend
 │   ├── login.html                  # Login page for web access
@@ -22,23 +30,18 @@ omni-antigravity-remote-chat/
 ├── docs/
 │   ├── CODE_DOCUMENTATION.md       # This file
 │   ├── DESIGN_PHILOSOPHY.md        # Architecture rationale
-│   ├── RELEASE_NOTES.md            # Legacy release notes (pre-0.3.0)
-│   └── SOCIAL_MEDIA.md             # Social media content
+│   └── RELEASE_NOTES.md            # Legacy release notes (pre-0.3.0)
 ├── .github/
-│   ├── workflows/ci.yml            # CI pipeline (Node 18/20/22)
+│   ├── workflows/ci.yml            # CI pipeline (Node 22+)
 │   ├── ISSUE_TEMPLATE/             # Bug report & feature request templates
 │   └── PULL_REQUEST_TEMPLATE.md    # PR template
 ├── launcher.js                     # Node.js entry point (QR, ngrok, env)
-├── test.js                         # Validation test suite (25 checks)
+├── test/test.js                    # Validation test suite (25 checks)
+├── Dockerfile                      # Docker support
 ├── package.json                    # Dependencies and scripts
-├── .env.example                    # Environment template (PORT=4747)
-├── AGENTS.md                       # AI coding assistant instructions
-├── CHANGELOG.md                    # Version history (0.3.x)
-├── SECURITY.md                     # Security documentation
-├── CONTRIBUTING.md                 # Contribution guidelines
-├── CODE_OF_CONDUCT.md              # Contributor Covenant v2.1
-├── LICENSE                         # GPL v3
-└── README.md                       # Step-by-step setup guide
+├── .env.example                    # Environment template
+├── CHANGELOG.md                    # Version history
+└── README.md                       # Setup guide
 ```
 
 ## High-Level Architecture
@@ -68,19 +71,43 @@ graph TD
 | **7800** | Antigravity CDP debug port | `--remote-debugging-port` flag |
 | **4747** | OmniAntigravity web server |        `PORT` in `.env`        |
 
-## Core Modules & Methods (src/server.js)
+## Core Modules
 
-| Module/Function            | Description                                                                         |
+Since v0.5.2, the codebase follows a modular architecture.
+
+### src/config.js — Constants & Configuration
+
+Centralizes all constants, environment variables, and container IDs. Eliminates magic strings and numbers throughout the codebase.
+
+### src/state.js — Shared State & Type Definitions
+
+Manages shared mutable state with JSDoc `@typedef` for `CDPConnection`, `CDPTarget`, and `Snapshot`. Provides explicit setter functions for safe state mutation.
+
+### src/utils/ — Utility Modules
+
+| Module       | Functions                                            | Description                                          |
+| :----------- | :--------------------------------------------------- | :--------------------------------------------------- |
+| `network.js` | `getLocalIP`, `isLocalRequest`, `getJson`            | Network utilities for IP detection and HTTP requests |
+| `process.js` | `killPortProcess`, `isPortFree`, `launchAntigravity` | OS process management and Antigravity launching      |
+| `hash.js`    | `hashString`                                         | Simple hash utility for diff detection               |
+
+### src/cdp/connection.js — CDP Connection
+
+| Function           | Description                                                        |
+| :----------------- | :----------------------------------------------------------------- |
+| `discoverCDP()`    | Scans ports 7800-7803 to find Antigravity workbench target.        |
+| `discoverAllCDP()` | Returns ALL CDP targets across all ports (multi-window support).   |
+| `connectCDP()`     | Establishes CDP WebSocket with `pendingCalls` Map and 30s timeout. |
+| `initCDP()`        | Orchestrates discovery → connection → context registration.        |
+
+### src/server.js — CDP Action Functions
+
+| Function                   | Description                                                                         |
 | :------------------------- | :---------------------------------------------------------------------------------- |
-| `killPortProcess()`        | Kills existing process on server port (prevents EADDRINUSE). Cross-platform.        |
-| `getLocalIP()`             | Detects local network IP for mobile access display.                                 |
-| `discoverCDP()`            | Scans ports 7800-7803 to find Antigravity workbench target.                         |
-| `discoverAllCDP()`         | Returns ALL CDP targets across all ports (multi-window support).                    |
-| `connectCDP()`             | Establishes CDP WebSocket with `pendingCalls` Map and 30s timeout.                  |
 | `captureSnapshot()`        | Injects JS into Antigravity to clone chat DOM, extract CSS, return HTML.            |
 | `injectMessage()`          | Locates input field and simulates typing/submission via CDP.                        |
 | `setMode()` / `setModel()` | Text-based selectors to change AI settings remotely.                                |
-| `clickElement()`           | Relays physical click from phone to element on Desktop.                             |
+| `clickElement()`           | Deterministic targeting with occurrence index + leaf-node filtering.                |
 | `remoteScroll()`           | Syncs phone scroll position to Desktop chat container.                              |
 | `getAppState()`            | Syncs Mode/Model status and detects history visibility.                             |
 | `startNewChat()`           | Triggers "New Chat" action on Desktop.                                              |
