@@ -1,3 +1,29 @@
+/**
+ * OmniAntigravity Remote Chat — Frontend Application
+ *
+ * Mobile interface for remote-controlling Antigravity AI sessions.
+ * Manages WebSocket connection, DOM snapshot rendering, scroll sync,
+ * chat history, model/mode switching, and multi-window target selection.
+ *
+ * @file app.js
+ *
+ * Sections:
+ *   1. Elements & State
+ *   2. Auth Utilities
+ *   3. WebSocket Connection
+ *   4. Snapshot Rendering
+ *   5. Code Block Copy
+ *   6. Message Input & Quick Actions
+ *   7. Scroll Sync
+ *   8. Chat History & Selection
+ *   9. Settings (Mode, Model)
+ *  10. Multi-Window & CDP Status
+ */
+
+// ═══════════════════════════════════════════════════════════════════
+// 1. Elements & State
+// ═══════════════════════════════════════════════════════════════════
+
 // --- Elements ---
 const chatContainer = document.getElementById('chatContainer');
 const chatContent = document.getElementById('chatContent');

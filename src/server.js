@@ -38,16 +38,27 @@ import { getLocalIP, isLocalRequest, getJson } from './utils/network.js';
 import { killPortProcess, launchAntigravity } from './utils/process.js';
 import { hashString } from './utils/hash.js';
 import { discoverCDP, discoverAllCDP, connectCDP, initCDP } from './cdp/connection.js';
-
-// ─── Mutable State (local aliases — will be managed by state module in future) ──
-let cdpConnection = null;
-let lastSnapshot = null;
-let lastSnapshotHash = null;
-let availableTargets = [];
-let activeTargetId = null;
-let AUTH_TOKEN = 'ag_default_token';
-
 import { inspectUI } from './ui_inspector.js';
+
+// ─── Mutable State ──────────────────────────────────────────────────
+
+/** @type {import('./state.js').CDPConnection | null} */
+let cdpConnection = null;
+
+/** @type {import('./state.js').Snapshot | null} */
+let lastSnapshot = null;
+
+/** @type {string | null} */
+let lastSnapshotHash = null;
+
+/** @type {import('./state.js').CDPTarget[]} */
+let availableTargets = [];
+
+/** @type {string | null} */
+let activeTargetId = null;
+
+/** @type {string} */
+let AUTH_TOKEN = 'ag_default_token';
 
 // ─── CDP Action Functions ───────────────────────────────────────────
 // These functions contain large template-literal scripts injected into
@@ -57,7 +68,11 @@ import { inspectUI } from './ui_inspector.js';
 
 // (connectCDP moved to src/cdp/connection.js)
 
-// Capture chat snapshot
+/**
+ * Capture the current chat DOM as an HTML snapshot with CSS styles.
+ * @param {import('./state.js').CDPConnection} cdp
+ * @returns {Promise<import('./state.js').Snapshot | null>}
+ */
 async function captureSnapshot(cdp) {
     const CAPTURE_SCRIPT = `(() => {
         // Smart container detection: try multiple IDs with fallback chain
@@ -218,7 +233,12 @@ async function captureSnapshot(cdp) {
     return null;
 }
 
-// Inject message into Antigravity
+/**
+ * Inject a message into the Antigravity chat editor and submit it.
+ * @param {import('./state.js').CDPConnection} cdp
+ * @param {string} text
+ * @returns {Promise<{ok: boolean, method?: string, reason?: string, error?: string}>}
+ */
 async function injectMessage(cdp, text) {
     // Use JSON.stringify for robust escaping (handles ", \, newlines, backticks, unicode, etc.)
     const safeText = JSON.stringify(text);
@@ -279,7 +299,12 @@ async function injectMessage(cdp, text) {
     return { ok: false, reason: "no_context" };
 }
 
-// Set functionality mode (Fast vs Planning)
+/**
+ * Set the functionality mode (Fast vs Planning).
+ * @param {import('./state.js').CDPConnection} cdp
+ * @param {'Fast' | 'Planning'} mode
+ * @returns {Promise<{success?: boolean, alreadySet?: boolean, error?: string}>}
+ */
 async function setMode(cdp, mode) {
     if (!['Fast', 'Planning'].includes(mode)) return { error: 'Invalid mode' };
 
@@ -378,7 +403,11 @@ async function setMode(cdp, mode) {
     return { error: 'Context failed' };
 }
 
-// Stop Generation
+/**
+ * Stop the current AI generation.
+ * @param {import('./state.js').CDPConnection} cdp
+ * @returns {Promise<{success?: boolean, method?: string, error?: string}>}
+ */
 async function stopGeneration(cdp) {
     const EXP = `(async () => {
         // Look for the cancel button
@@ -412,7 +441,12 @@ async function stopGeneration(cdp) {
     return { error: 'Context failed' };
 }
 
-// Click Element (Remote)
+/**
+ * Click a DOM element via deterministic targeting with occurrence index.
+ * @param {import('./state.js').CDPConnection} cdp
+ * @param {{selector: string, index: number, textContent?: string}} params
+ * @returns {Promise<{success?: boolean, matchCount?: number, index?: number, error?: string}>}
+ */
 async function clickElement(cdp, { selector, index, textContent }) {
     // Deterministic targeting with occurrence index tracking and leaf-node filtering
     const safeTextContent = textContent ? JSON.stringify(textContent) : 'null';
@@ -481,7 +515,12 @@ async function clickElement(cdp, { selector, index, textContent }) {
     return { error: 'Click failed in all contexts' };
 }
 
-// Remote scroll - sync phone scroll to desktop
+/**
+ * Sync phone scroll position to the desktop chat container.
+ * @param {import('./state.js').CDPConnection} cdp
+ * @param {{scrollTop?: number, scrollPercent?: number}} params
+ * @returns {Promise<{success?: boolean, scrolled?: number, error?: string}>}
+ */
 async function remoteScroll(cdp, { scrollTop, scrollPercent }) {
     // Try to scroll the chat container in Antigravity
     const EXPRESSION = `(async () => {
@@ -534,7 +573,12 @@ async function remoteScroll(cdp, { scrollTop, scrollPercent }) {
     return { error: 'Scroll failed in all contexts' };
 }
 
-// Set AI Model
+/**
+ * Set the AI model via the model selector dropdown.
+ * @param {import('./state.js').CDPConnection} cdp
+ * @param {string} modelName
+ * @returns {Promise<{success?: boolean, method?: string, error?: string}>}
+ */
 async function setModel(cdp, modelName) {
     const EXP = `(async () => {
         try {
@@ -675,7 +719,11 @@ async function setModel(cdp, modelName) {
     return { error: 'Context failed' };
 }
 
-// Start New Chat - Click the + button at the TOP of the chat window (NOT the context/media + button)
+/**
+ * Start a new chat by clicking the + button at the top toolbar.
+ * @param {import('./state.js').CDPConnection} cdp
+ * @returns {Promise<{success?: boolean, method?: string, count?: number, error?: string}>}
+ */
 async function startNewChat(cdp) {
     const EXP = `(async () => {
         try {
@@ -741,7 +789,11 @@ async function startNewChat(cdp) {
     }
     return { error: 'Context failed' };
 }
-// Get Chat History - Click history button and scrape conversations
+/**
+ * Click the history button and scrape the conversation list.
+ * @param {import('./state.js').CDPConnection} cdp
+ * @returns {Promise<{success?: boolean, chats: Array<{title: string, date: string}>, debug?: object, error?: string}>}
+ */
 async function getChatHistory(cdp) {
     const EXP = `(async () => {
         try {
@@ -931,6 +983,12 @@ async function getChatHistory(cdp) {
     return { error: 'Context failed: ' + (lastError || 'No contexts available'), chats: [] };
 }
 
+/**
+ * Select a specific chat from the history panel by title.
+ * @param {import('./state.js').CDPConnection} cdp
+ * @param {string} chatTitle
+ * @returns {Promise<{success?: boolean, method?: string, error?: string}>}
+ */
 async function selectChat(cdp, chatTitle) {
     const safeChatTitle = JSON.stringify(chatTitle);
 
@@ -1052,7 +1110,11 @@ async function selectChat(cdp, chatTitle) {
     return { error: 'Context failed' };
 }
 
-// Check if a chat is currently open (has cascade element)
+/**
+ * Check if a chat is currently open (has a cascade/conversation element).
+ * @param {import('./state.js').CDPConnection} cdp
+ * @returns {Promise<{hasChat: boolean, hasMessages: boolean, editorFound: boolean}>}
+ */
 async function hasChatOpen(cdp) {
     const EXP = `(() => {
     const chatContainer = document.getElementById('conversation') || document.getElementById('chat') || document.getElementById('cascade');
@@ -1082,7 +1144,11 @@ async function hasChatOpen(cdp) {
     return { hasChat: false, hasMessages: false, editorFound: false };
 }
 
-// Get App State (Mode & Model)
+/**
+ * Get the current app state — active mode and AI model.
+ * @param {import('./state.js').CDPConnection} cdp
+ * @returns {Promise<{mode: string, model: string, error?: string} | {error: string}>}
+ */
 async function getAppState(cdp) {
     const EXP = `(async () => {
     try {
@@ -1176,7 +1242,11 @@ async function getAppState(cdp) {
 // isLocalRequest → src/utils/network.js
 // initCDP → src/cdp/connection.js
 
-// Background polling with exponential backoff & CDP status broadcast
+/**
+ * Background polling with exponential backoff and CDP status broadcast.
+ * @param {import('ws').WebSocketServer} wss
+ * @returns {Promise<void>}
+ */
 async function startPolling(wss) {
     let lastErrorLog = 0;
     let isConnecting = false;

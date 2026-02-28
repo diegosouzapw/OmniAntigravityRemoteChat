@@ -8,7 +8,7 @@
 /**
  * @typedef {Object} CDPConnection
  * @property {import('ws')} ws - WebSocket connection
- * @property {Array<{id: number, name: string, origin: string}>} contexts - Execution contexts
+ * @property {Array<{id: number, name: string, origin: string, auxData?: {frameId?: string, isDefault?: boolean}}>} contexts - Execution contexts
  * @property {(method: string, params?: object) => Promise<any>} call - CDP method caller
  */
 
@@ -30,6 +30,7 @@
  * @property {string} color
  * @property {string} fontFamily
  * @property {{scrollTop: number, scrollHeight: number, clientHeight: number, scrollPercent: number}} scrollInfo
+ * @property {string} [error] - Error message if capture failed
  * @property {{nodes: number, htmlSize: number, cssSize: number}} stats
  */
 
