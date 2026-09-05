@@ -100,6 +100,124 @@ export function extractPendingCommand(html) {
 }
 
 /**
+ * Detects pending prompt from HTML snapshot content.
+ * Supports terminal commands ('run command') and plan approvals ('proceed').
+ *
+ * @param {string} html
+ * @returns {any | null}
+ */
+export function detectPendingPromptFromHtml(html) {
+    if (!html) return null;
+
+    // Check for actual button elements or role="button" with action text
+    // Avoid matching conversational markdown text or transcript lists
+    const hasRunBtn = /<button[^>]*>[\s\S]*?(?:run command|run)<\/button>/i.test(html) ||
+                      /<(?:div|span)[^>]*?(?:role=["']button["']|class=["'][^"']*?btn[^"']*?["'])[^>]*>[\s\S]*?(?:run command|run)<\/(?:div|span)>/i.test(html);
+
+    const hasRejectBtn = /<button[^>]*>[\s\S]*?(?:reject|deny|cancel|abort)<\/button>/i.test(html) ||
+                         /<(?:div|span)[^>]*?(?:role=["']button["']|class=["'][^"']*?btn[^"']*?["'])[^>]*>[\s\S]*?(?:reject|deny|cancel|abort)<\/(?:div|span)>/i.test(html);
+
+    // 1. Check for command approval (run command + reject/deny/cancel)
+    if (hasRunBtn && hasRejectBtn) {
+        let cmdText = '';
+        const codeMatch = html.match(/<code[^>]*>([\s\S]*?)<\/code>/i) ||
+                          html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+        if (codeMatch && codeMatch[1]) {
+            cmdText = codeMatch[1].replace(/<[^>]+>/g, '').trim();
+        }
+        if (!cmdText) {
+            const cmdLineMatch = html.match(/CommandLine:\s*([^\n\r<]+)/i);
+            if (cmdLineMatch && cmdLineMatch[1]) {
+                cmdText = cmdLineMatch[1].trim();
+            }
+        }
+        if (!cmdText) {
+            cmdText = extractPendingCommand(html);
+        }
+
+        const heuristics = evaluateCommandHeuristics(cmdText);
+        const cmdHash = Math.abs(cmdText.split('').reduce((a, b) => ((a << 5) + a) + b.charCodeAt(0), 5381)).toString(36);
+        return {
+            id: 'cmd-' + cmdHash,
+            type: 'command',
+            title: 'Command Execution',
+            command: cmdText || 'run_command',
+            riskLevel: heuristics.riskLevel || 'warning',
+            riskReason: heuristics.reason,
+            acceptText: 'Run command',
+            rejectText: 'Reject'
+        };
+    }
+
+    // 2. Check for Implementation Plan Proceed button
+    const hasProceedBtn = /<button[^>]*>[\s\S]*?(?:proceed with plan|proceed)<\/button>/i.test(html) ||
+                          /<(?:div|span)[^>]*?(?:role=["']button["']|class=["'][^"']*?btn[^"']*?["'])[^>]*>[\s\S]*?(?:proceed with plan|proceed)<\/(?:div|span)>/i.test(html);
+
+    if (hasProceedBtn && /plan/i.test(html)) {
+        return {
+            id: 'plan-approval',
+            type: 'plan',
+            title: 'Plan Approval',
+            summary: 'Implementation plan is ready for execution.',
+            proceedText: 'Proceed with Plan',
+            reviewText: 'Review',
+            hasPreview: true
+        };
+    }
+
+    // 3. Check for Interactive Question prompt (Submit/Continue + Skip buttons or Antigravity testids)
+    const hasContinueOrSubmit = /data-testid=["']interaction-continue-button["']/i.test(html) ||
+                                /<button[^>]*>[\s\S]*?(?:submit|continue)[\s\S]*?<\/button>/i.test(html) ||
+                                /<(?:div|span)[^>]*?(?:role=["']button["'])[^>]*>[\s\S]*?(?:submit|continue)[\s\S]*?<\/(?:div|span)>/i.test(html);
+    const hasSkip = /data-testid=["']interaction-skip-button["']/i.test(html) ||
+                    /<button[^>]*>[\s\S]*?skip[\s\S]*?<\/button>/i.test(html) ||
+                    /<(?:div|span)[^>]*?(?:role=["']button["'])[^>]*>[\s\S]*?skip[\s\S]*?<\/(?:div|span)>/i.test(html);
+
+    if (hasContinueOrSubmit && hasSkip) {
+        let questionTitle = 'Interactive Decision';
+        const titleMatch = html.match(/<div[^>]*class=["'][^"']*?text-sm[^"']*?["'][^>]*>([\s\S]*?)<\/div>/i) ||
+                           html.match(/<h\d[^>]*>([\s\S]*?)<\/h\d>/i) ||
+                           html.match(/<p[^>]*class=["'][^"']*?question[^"']*?["'][^>]*>([\s\S]*?)<\/p>/i);
+        if (titleMatch && titleMatch[1]) {
+            questionTitle = titleMatch[1].replace(/<[^>]+>/g, '').trim();
+        }
+
+        const counterMatch = html.match(/\b\d+\s+of\s+\d+\b/i);
+        if (counterMatch) {
+            questionTitle = `[${counterMatch[0]}] ${questionTitle}`;
+        }
+
+        const isMulti = /checkbox/i.test(html) || /multi-select/i.test(html);
+        const hasWriteIn = /__write_in__/i.test(html) || /<textarea/i.test(html);
+
+        const qHash = Math.abs(questionTitle.split('').reduce((a, b) => ((a << 5) + a) + b.charCodeAt(0), 5381)).toString(36);
+
+        const continueBtnMatch = html.match(/data-testid=["']interaction-continue-button["'][^>]*>([\s\S]*?)<\/button>/i) ||
+                                 html.match(/<button[^>]*>([\s\S]*?(?:submit|continue)[\s\S]*?)<\/button>/i);
+        let submitText = 'Submit';
+        if (continueBtnMatch && continueBtnMatch[1]) {
+            const raw = continueBtnMatch[1].replace(/<[^>]+>/g, '').replace(/[↵\r\n]/g, '').trim();
+            if (/continue/i.test(raw)) submitText = 'Continue';
+            else if (/submit/i.test(raw)) submitText = 'Submit';
+        }
+
+        return {
+            id: 'question-' + qHash,
+            type: 'question',
+            title: questionTitle,
+            isMultiSelect: isMulti,
+            options: [],
+            hasWriteIn: hasWriteIn,
+            submitText: submitText,
+            skipText: 'Skip'
+        };
+    }
+
+    return null;
+}
+
+/**
+
  * Conservative heuristic gate. If it says "unsafe", we do not auto-approve
  * even if the LLM is optimistic.
  *
@@ -142,7 +260,7 @@ export function evaluateCommandHeuristics(commandText) {
     ];
 
     if (riskyPatterns.some((pattern) => pattern.test(sample))) {
-        return { safe: false, reason: 'heuristic-risky-command' };
+        return { safe: false, reason: 'heuristic-risky-command', riskLevel: 'critical' };
     }
 
     const safePatterns = [
@@ -178,10 +296,10 @@ export function evaluateCommandHeuristics(commandText) {
     ];
 
     if (safePatterns.some((pattern) => pattern.test(sample))) {
-        return { safe: true, reason: 'heuristic-safe-command' };
+        return { safe: true, reason: 'heuristic-safe-command', riskLevel: 'safe' };
     }
 
-    return { safe: false, reason: 'heuristic-unknown-command' };
+    return { safe: false, reason: 'heuristic-unknown-command', riskLevel: 'warning' };
 }
 
 /**

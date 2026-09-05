@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-05
+
+### Added
+- 🪟 **Multi-Window Auto-Targeting on Conversation Selection** — When selecting a past conversation belonging to an already-open workspace in another Antigravity IDE window, the bridge automatically switches active CDP target to that window without modal friction.
+- ⚡ **Synchronous Snapshot Delivery on Chat Switch** — `/select-chat` immediately invalidates cached DOM snapshots, captures a fresh snapshot from the target window, broadcasts it across WebSockets, and returns the snapshot in the HTTP response for zero-latency client rendering.
+
+### Fixed
+- 🐛 **Cross-Workspace Confirmation Prompt Auto-Confirm** — Auto-detects and confirms VS Code `.quick-input-widget` modal dialogs (*"Open in current window"*) when loading conversations across workspaces, resolving desktop lockup.
+- 🐛 **CDP Reconnection Hang Resolution** — Added `ws.on('close')` event handling in `connectCDP()` to immediately reject in-flight requests and clear timeouts, preventing 30-second delays during window switching.
+- 🐛 **Mobile PWA Stale Cache Invalidation** — Bumped Service Worker shell cache to `v10` and added version cache-busting to `app.js` script tag in `index.html` to guarantee instant mobile client updates.
+
+## [1.4.0] - 2026-09-05
+
+### Added
+- ❓ **Native Mirrored Interactive Question Prompts & Grill-Me Support** — Full mirror and interaction support for Antigravity's `ask_question` tool and `/grill-me` design sessions:
+  - Preserves interactive question containers (`data-testid^="interaction-"`) from snapshot stripping during DOM cleanup.
+  - Mirrored chat view renders option pills directly on mobile with instant optimistic tap feedback.
+  - High-contrast visual highlight: 1.5px accent border, glowing ambient background (`var(--accent-soft)`), illuminated option ID badges (`A1`, `A2`, `1`, `2`) in bold white on accent background, and subtle unselected styling.
+  - Stable switching UX (zero rubber-banding): suppressed synthetic duplicate click events on `<input>` elements, debounced snapshot reloads, and implemented an `activeUserOptionKey` grace period in `loadSnapshot()` preventing in-flight stale desktop snapshots from reverting selections.
+  - Multi-step questionnaire support with dynamic "Continue ↵" vs "Submit ↵" buttons and write-in input field handling.
+- ⚡ **Gemini Antigravity CDP Support & Lexical Editor Staging** — Backported from Kelvin Tan's fork ([@kelverssg](https://github.com/kelverssg)):
+  - Local HTTPS Gemini Antigravity CDP target discovery via URL patterns in `src/cdp/connection.js`.
+  - Multi-window target enumeration across ports supporting Gemini page targets alongside classic workbench targets.
+  - Lexical editor injection (`[data-lexical-editor="true"]`, `[aria-label="Message input"]`) with Shadow DOM `composed: true` event dispatching.
+  - Input boundary staging verification ensuring messages are registered in Lexical/Preact state before triggering submission.
+  - Multi-tab fallback scanner (`injectMessageAnyTab`) across ports when primary editor is unfocused.
+- 🔒 **Concurrency Serialization & Message Deduplication**:
+  - Global atomic Promise-chain lock (`withSendLock`) preventing overlapping mutations inside the editor.
+  - Fail-safe Express error handling returning HTTP 500 cleanly without hanging callers on unexpected rejections.
+  - SHA-256 message deduplication with 120-second suppression window (`SEND_DEDUPE_MS = 120_000`) protecting against automated retry loops.
+  - Busy retry backoff loop (`[1000, 2000, 4000]` ms) on `/send`.
+- 🎙️ **Native Voice Memos** — In-browser audio recording directly from the mobile composer with live waveform/timer visualization, supporting `audio/webm` (Opus), `audio/mp4`, and `audio/wav`. Uploads to `POST /api/upload-audio` and injects directly into the Antigravity prompt for Gemini multimodal audio processing.
+- 📋 **Interactive Plan & Action Decision Remote System** — Remote support for Antigravity's Planning Mode artifacts (`implementation_plan.md`, `walkthrough.md`). Provides interactive action cards for plans, command approvals, and design questions.
+- 🗂️ **Mobile Plan Preview Modal & Review Drawer** — Full mobile markdown preview of implementation plans with 1-tap "Proceed with Plan", a sliding review drawer for custom feedback, and a "Reply Later / Snooze" option.
+- 🖼️ **Image & Media Attachments** — Added `POST /api/upload-image` endpoint with mobile file picker and drag-and-drop support for sending screenshots and media directly into the desktop chat.
+- 🧪 **Developer Mode & Diagnostic Tools** — Isolated diagnostic card in `/admin` with status dot simulators (`Idle`, `Working...`, `Thinking...`, `Reconnecting`, `Cycle`, `Reset`) and action card mock triggers (`Mock Plan Approval`, `Mock Command`, `Mock Question`). Conditionally exposes a discrete "Developer Tools" menu in the mobile chat when active (`localStorage.omni_dev_mode` or `?dev=1`).
+- 🗜️ **Ultra-Compact Header Mode** — Added a toggleable compact header mode option for smaller mobile viewports.
+- 🧪 **Expanded Unit Test Suite** — Added Vitest unit test suites (`send-lock.test.js`, `action-decision.test.js`, `upload-audio.test.js`, `mobile-viewport.test.js`, `upload-media.test.js`), bringing total coverage to 13 files and 102/102 passing tests.
+
+### Changed
+- 🛑 **Better Explicit STOP Button** — Enhanced the active STOP button with an explicit, sober crimson satin finish and gentle ambient breathing pulse (`@keyframes stop-pulse-sober`) when the agent is actively generating, providing immediate visual feedback without harsh glare.
+- 🔔 **LIVE Badge & Agent Status** — Improved the LIVE status badge to dynamically reflect real-time Antigravity connection and agent activity (Idle, Working, Thinking) with interactive toast details on tap.
+- 📱 **Mobile Viewport & Dynamic Island Optimization** — Hardened virtual keyboard behavior via `interactive-widget=resizes-content` and visual viewport listeners (`window.visualViewport`), with full safe-area inset adaptation for notches and Dynamic Islands.
+- ⚡ **PWA Cache Strategy** — Bumped Service Worker shell cache to `omni-antigravity-shell-v9` with Network-First strategy for core CSS/JS assets.
+
+### Fixed
+- 🐛 **Option Selection Cycling & Animation Replays** — Fixed rapid option switching jitter by deduplicating `<input>` synthetic events and locking active user selection against stale snapshots.
+- 🐛 **PWA Missing Icons** — Fixed missing or unrendered PWA app icons by adding `<link rel="icon">`, `<link rel="apple-touch-icon">`, and caching both standard and maskable SVG icons in the service worker shell.
+- 🐛 **Activity End Detection & STOP Button Deactivation** — Fixed a regression where past-tense step summaries (`"Worked for 3 minutes"`, `"Completed"`) caused `isGenerating` to remain `true` indefinitely. Active generation is now strictly bound to live IDE markers (`cancelBtn`, Preact `isRunning`, active spinner), deactivating the STOP button immediately upon turn completion.
+- 🐛 **False-Alarm Termination Alerts** — Eliminated spurious "Agent Terminated or Blocked!" toasts caused by substring matching on chat history. Error detection now strictly targets live DOM error banners and notifications (`[data-testid="error-banner"]`, `.notification-toast-error`).
+- 🐛 **Duplicate Action Card Re-Prompting** — Implemented an acted-action suppression set (`actedActionIds`) preventing already answered plans or commands from blinking or re-appearing.
+
+### Security
+- 🔒 **Gated Dev Mock Endpoints** — Guarded `/api/action/mock` and `/api/status/mock` behind `getDevMocksEnabled()` (`ENABLE_DEV_MOCKS`), automatically disabling mock routes in production (returning HTTP 403 Forbidden).
+
 ## [1.3.1] - 2026-04-25
 
 ### Fixed

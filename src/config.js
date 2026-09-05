@@ -99,6 +99,12 @@ export function getScreenshotMax() {
     return readPositiveIntEnv('SCREENSHOT_MAX', 100);
 }
 
+// ─── Developer Tools & Mocks ────────────────────────────────────────
+
+export function getDevMocksEnabled() {
+    return readBooleanEnv('ENABLE_DEV_MOCKS', process.env.NODE_ENV !== 'production');
+}
+
 // ─── Version ────────────────────────────────────────────────────────
 
-export const VERSION = '1.3.0';
+export const VERSION = '1.4.1';

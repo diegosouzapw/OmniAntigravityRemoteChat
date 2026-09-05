@@ -11,7 +11,9 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>OmniAntigravity Admin</title>
-    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="icon" type="image/svg+xml" href="/icons/app-icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/app-icon.svg" />
+    <link rel="stylesheet" href="/css/style.css?v=1.3.5" />
     <script src="/js/theme-bootstrap.js"></script>
   </head>
   <body>
@@ -71,6 +73,42 @@
               </div>
             </div>
             <div class="quick-command-fields" id="quickCommandsEditor"></div>
+          </section>
+
+          <section class="admin-card">
+            <div class="panel-header">
+              <div>
+                <div class="panel-title">Developer & Diagnostic Tools</div>
+                <div class="panel-subtitle">Simulate status indicators, action modals and test UI without polluting production chat</div>
+              </div>
+            </div>
+            <div class="admin-actions" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <strong>Client Developer Mode</strong>
+                <div class="panel-subtitle" style="font-size: 0.8rem;">Enables dev diagnostics menu in mobile chat view for this browser</div>
+              </div>
+              <button class="panel-btn" id="toggleDevModeBtn">Enable Dev Mode</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+              <div class="panel-subtitle" style="font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">Simulate Status Dot (Mobile View)</div>
+              <div class="admin-actions" style="flex-wrap: wrap; gap: 6px;">
+                <button class="panel-btn" data-status-mode="idle">Idle</button>
+                <button class="panel-btn" data-status-mode="working">Working...</button>
+                <button class="panel-btn" data-status-mode="thinking">Thinking...</button>
+                <button class="panel-btn" data-status-mode="reconnecting">Reconnecting</button>
+                <button class="panel-btn" data-status-mode="cycle">Full Cycle</button>
+                <button class="panel-btn danger" data-status-mode="reset">Reset</button>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+              <div class="panel-subtitle" style="font-weight: 600; text-transform: uppercase; font-size: 0.72rem; letter-spacing: 0.05em;">Simulate Action Cards (Requires ENABLE_DEV_MOCKS)</div>
+              <div class="admin-actions" style="flex-wrap: wrap; gap: 6px;">
+                <button class="panel-btn" data-action-type="plan">Mock Plan Approval</button>
+                <button class="panel-btn" data-action-type="command">Mock Command Card</button>
+                <button class="panel-btn" data-action-type="question">Mock Question Choice</button>
+              </div>
+            </div>
+            <div class="code-preview" id="adminDevStatus" style="font-size: 0.8rem;">Dev tools ready.</div>
           </section>
 
           <section class="admin-card">

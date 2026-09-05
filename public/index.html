@@ -8,10 +8,12 @@
     />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content"
     />
     <title>OmniAntigravity Remote Chat</title>
     <meta name="theme-color" content="#1d9bf0" />
+    <link rel="icon" type="image/svg+xml" href="/icons/app-icon.svg" />
+    <link rel="apple-touch-icon" href="/icons/app-icon.svg" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,7 +21,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/style.css?v=1.3.5" />
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css"
@@ -31,81 +33,136 @@
       <header class="header">
         <div class="header-brand">
           <div class="brand-mark">
-            <h1>OmniAntigravity</h1>
+            <img class="brand-logo" src="/icons/app-icon.svg" alt="OmniAntigravity" title="OmniAntigravity" width="26" height="26" />
+            <h1><span class="brand-title-short">Omni</span><span class="brand-title-full">Antigravity</span></h1>
+            <div class="status-badge compact" id="statusBadge" title="Live · Ready">
+              <div class="status-dot connected idle" id="statusDot"></div>
+              <span class="status-text" id="statusText" style="display:none;"></span>
+            </div>
           </div>
           <div class="header-subtitle">
             Remote chat, workspace and admin tools
           </div>
         </div>
         <div class="header-controls">
-          <button class="icon-btn new-chat-btn" id="newChatBtn" aria-label="New Chat">
+          <button class="icon-btn new-chat-btn" id="newChatBtn" aria-label="New Chat" title="New Chat">
             <svg viewBox="0 0 24 24">
               <path d="M12 5v14M5 12h14"></path>
             </svg>
           </button>
-          <button class="icon-btn" id="historyBtn" aria-label="History">
+          <button class="icon-btn" id="historyBtn" aria-label="History" title="Chat History">
             <svg viewBox="0 0 24 24">
               <circle cx="12" cy="12" r="9"></circle>
               <path d="M12 8v5l3 2"></path>
             </svg>
           </button>
-          <button class="icon-btn stop-btn" id="stopBtn" aria-label="Stop">
+          <button class="icon-btn stop-btn" id="stopBtn" aria-label="Stop" title="Stop">
+            <svg class="stop-icon" viewBox="0 0 16 16" width="9" height="9" fill="currentColor">
+              <rect x="3" y="3" width="10" height="10" rx="2"></rect>
+            </svg>
             <span>STOP</span>
           </button>
-          <button class="icon-btn" id="refreshBtn" aria-label="Refresh">
+          <button class="icon-btn" id="refreshBtn" aria-label="Refresh" title="Refresh">
             <svg viewBox="0 0 24 24">
               <path d="M21 12a9 9 0 1 1-3-6.7"></path>
               <path d="M21 3v6h-6"></path>
             </svg>
           </button>
-          <a class="ghost-link" href="/minimal" target="_blank" rel="noreferrer">
-            Lite
-          </a>
-          <a class="ghost-link" href="/admin" target="_blank" rel="noreferrer">
-            Admin
-          </a>
-          <div class="status-badge">
-            <div class="status-dot disconnected" id="statusDot"></div>
-            <span id="statusText">Connecting...</span>
+          <div class="overflow-menu-anchor">
+            <button class="icon-btn overflow-btn" id="overflowMenuBtn" aria-label="More tools" title="Menu">
+              <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="5" r="1.5"></circle>
+                <circle cx="12" cy="12" r="1.5"></circle>
+                <circle cx="12" cy="19" r="1.5"></circle>
+              </svg>
+            </button>
+            <div class="overflow-dropdown" id="headerOverflowDropdown" hidden>
+              <div class="overflow-dropdown-group">
+                <a class="overflow-item" href="/minimal" target="_blank" rel="noreferrer">
+                  <span class="overflow-item-icon">⚡</span>
+                  <div class="overflow-item-text">
+                    <strong>Lite Mode</strong>
+                    <small>Minimal bandwidth chat</small>
+                  </div>
+                </a>
+                <a class="overflow-item" href="/admin" target="_blank" rel="noreferrer">
+                  <span class="overflow-item-icon">🛠️</span>
+                  <div class="overflow-item-text">
+                    <strong>Admin Panel</strong>
+                    <small>Logs, tunnels & metrics</small>
+                  </div>
+                </a>
+              </div>
+              <div class="overflow-dropdown-divider"></div>
+              <div class="overflow-dropdown-group">
+                <button class="overflow-item" id="voiceMemoSettingBtn">
+                  <span class="overflow-item-icon">🎙️</span>
+                  <div class="overflow-item-text">
+                    <strong>Voice Memos</strong>
+                    <small id="voiceMemoSettingText">On</small>
+                  </div>
+                </button>
+                <button class="overflow-item" id="compactModeBtn">
+                  <span class="overflow-item-icon">🗜️</span>
+                  <div class="overflow-item-text">
+                    <strong>Compact Mode</strong>
+                    <small id="compactModeText">Off</small>
+                  </div>
+                </button>
+                <button class="overflow-item" id="targetBtn">
+                  <span class="overflow-item-icon">🪟</span>
+                  <div class="overflow-item-text">
+                    <strong>Switch Window</strong>
+                    <small id="targetText">Target</small>
+                  </div>
+                </button>
+                <button class="overflow-item" id="themeBtn">
+                  <span class="overflow-item-icon">🎨</span>
+                  <div class="overflow-item-text">
+                    <strong>Theme</strong>
+                    <small id="themeText">Dark</small>
+                  </div>
+                </button>
+                <button class="overflow-item" id="sessionStatsBtn">
+                  <span class="overflow-item-icon">📊</span>
+                  <div class="overflow-item-text">
+                    <strong>Session Stats</strong>
+                    <small id="sessionStatsText">0 msg</small>
+                  </div>
+                </button>
+                <button class="overflow-item" id="devModeOverflowBtn" hidden>
+                  <span class="overflow-item-icon">🧪</span>
+                  <div class="overflow-item-text">
+                    <strong>Developer Tools</strong>
+                    <small>Status & Action Simulation</small>
+                  </div>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </header>
 
       <div class="settings-bar">
-        <button class="setting-chip" id="modeBtn">
-          <span>Mode</span>
-          <strong id="modeText">Fast</strong>
-        </button>
-        <button class="setting-chip" id="modelBtn">
-          <span>Model</span>
+        <button class="setting-chip" id="modelBtn" title="Switch AI Model & Thinking Tier">
+          <span class="chip-icon">🤖</span>
           <strong id="modelText">Loading...</strong>
         </button>
-        <button class="setting-chip" id="targetBtn">
-          <span>Window</span>
-          <strong id="targetText">Switch</strong>
+        <button class="setting-chip" id="workspaceToggleBtn" title="Workspace Drawer">
+          <span class="chip-icon">📁</span>
+          <span class="chip-label">Files</span>
         </button>
-        <button class="setting-chip" id="themeBtn">
-          <span>Theme</span>
-          <strong id="themeText">Dark</strong>
-        </button>
-        <button class="setting-chip" id="workspaceToggleBtn">
-          <span>Workspace</span>
-          <strong id="workspaceStatusText">Closed</strong>
-        </button>
-        <button class="setting-chip" id="sessionStatsBtn">
-          <span>Session</span>
-          <strong id="sessionStatsText">0 msg</strong>
-        </button>
-        <button class="setting-chip" id="suggestionsBtn">
-          <span>Suggest</span>
+        <button class="setting-chip" id="suggestionsBtn" title="Supervisor Suggestions">
+          <span class="chip-icon">💡</span>
+          <span class="chip-label">Suggest:</span>
           <strong id="suggestionsText">Off</strong>
         </button>
-        <button class="setting-chip" id="quotaBtn">
-          <span>Limits</span>
-          <strong id="quotaText">Check</strong>
+        <button class="setting-chip" id="quotaBtn" title="Check Model Quota">
+          <span class="chip-icon">⏳</span>
+          <span class="chip-label">Quota</span>
         </button>
-        <div class="setting-chip setting-chip-static">
-          <span>Sync</span>
+        <div class="setting-chip setting-chip-static" id="syncStatusChip" title="CDP Live Sync">
+          <span class="chip-icon">⚡</span>
           <strong id="statsText">Waiting...</strong>
         </div>
       </div>
@@ -192,26 +249,45 @@
       <div class="quick-actions" id="quickActions"></div>
 
       <section class="input-section">
-        <div class="input-toolbar">
-          <div class="panel-subtitle">
-            Quick upload sends the current message and image to the live session.
-          </div>
-          <div class="upload-row">
-            <button class="panel-btn" id="imageUploadBtn">Upload Image</button>
-            <input
-              type="file"
-              id="imageInput"
-              accept="image/*"
-              hidden
-            />
-          </div>
-        </div>
+        <div id="actionCardSlot" class="action-card-slot"></div>
+        <div id="stagedMediaSlot" class="staged-media-slot"></div>
         <div class="input-wrapper">
+          <input
+            type="file"
+            id="imageInput"
+            accept="image/*"
+            hidden
+          />
+          <button class="attach-btn" id="imageUploadBtn" type="button" aria-label="Attach image" title="Attach image">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
+              <circle cx="9" cy="9" r="2"></circle>
+              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
+            </svg>
+          </button>
           <textarea
             id="messageInput"
-            placeholder="Message the active Antigravity session..."
+            placeholder="Message Antigravity..."
             rows="1"
           ></textarea>
+          <button class="mic-btn" id="voiceMemoBtn" type="button" aria-label="Record voice memo" title="Record voice memo">
+            <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              <line x1="12" y1="19" x2="12" y2="23"></line>
+              <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+          </button>
+          <div class="recording-bar" id="voiceRecordingBar" style="display: none;">
+            <div class="rec-indicator">
+              <span class="rec-dot"></span>
+              <span class="rec-timer" id="recordingTimer">00:00</span>
+            </div>
+            <div class="rec-actions">
+              <button class="rec-btn rec-cancel" id="cancelRecordBtn" type="button" aria-label="Cancel recording" title="Cancel">✕</button>
+              <button class="rec-btn rec-done" id="doneRecordBtn" type="button" aria-label="Finish recording" title="Finish">✓</button>
+            </div>
+          </div>
           <button class="send-btn" id="sendBtn" aria-label="Send">
             <svg viewBox="0 0 24 24">
               <path d="M22 2 11 13"></path>
@@ -232,6 +308,43 @@
       </div>
     </div>
 
+    <!-- Implementation Plan Preview Modal -->
+    <div class="modal-overlay plan-preview-overlay" id="planPreviewModal" aria-hidden="true">
+      <div class="plan-preview-modal-panel">
+        <div class="plan-preview-header">
+          <div class="plan-preview-title-wrap">
+            <span class="plan-preview-icon">📋</span>
+            <div class="plan-preview-title-col">
+              <div class="plan-preview-title">Implementation Plan</div>
+              <div class="plan-preview-subtitle" id="planPreviewSubtitle">Loading plan...</div>
+            </div>
+          </div>
+          <button class="icon-btn" id="planPreviewCloseBtn" aria-label="Close preview">✕</button>
+        </div>
+        <div class="plan-preview-body" id="planPreviewBody">
+          <div class="plan-preview-loading">
+            <div class="plan-preview-spinner"></div>
+            <span>Loading implementation plan...</span>
+          </div>
+        </div>
+        <div class="plan-preview-review-drawer" id="planPreviewReviewDrawer" style="display:none;">
+          <div class="plan-preview-review-header">
+            <span class="plan-preview-review-title">💬 Plan Review &amp; Questions</span>
+            <button class="plan-preview-review-close" id="planPreviewReviewCancelBtn" type="button">✕</button>
+          </div>
+          <textarea id="planPreviewFeedbackInput" class="plan-preview-feedback-textarea" rows="3" placeholder="Ask questions or suggest modifications before proceeding..."></textarea>
+          <div class="plan-preview-drawer-actions">
+            <button class="action-card-btn primary" id="planPreviewReviewSubmitBtn" type="button">Submit Review</button>
+          </div>
+        </div>
+        <div class="plan-preview-footer">
+          <button class="action-card-btn secondary" id="planPreviewLaterBtn" type="button">Later</button>
+          <button class="action-card-btn secondary" id="planPreviewReviewBtn" type="button">Review</button>
+          <button class="action-card-btn primary" id="planPreviewProceedBtn" type="button">Proceed with Plan</button>
+        </div>
+      </div>
+    </div>
+
     <div class="history-layer" id="historyLayer">
       <div class="history-header">
         <button class="icon-btn" id="historyBackBtn" aria-label="Back">
@@ -244,6 +357,19 @@
           <div class="panel-subtitle">Switch or start a new chat</div>
         </div>
         <div class="history-header-spacer"></div>
+      </div>
+      <div class="history-workspace-bar" id="historyWorkspaceBar">
+        <div class="history-workspace-info">
+          <span class="history-workspace-label">Active Window</span>
+          <span class="history-workspace-name" id="historyActiveWindow">Antigravity IDE</span>
+        </div>
+        <button class="history-switch-window-btn" id="historySwitchWindowBtn" type="button" title="Switch Antigravity IDE Window">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+            <path d="M8 21h8M12 17v4"></path>
+          </svg>
+          <span>Switch Window</span>
+        </button>
       </div>
       <div class="history-content" id="historyList"></div>
     </div>
@@ -272,6 +398,6 @@
       defer
       src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"
     ></script>
-    <script type="module" src="/js/app.js"></script>
+    <script type="module" src="/js/app.js?v=1.4.1"></script>
   </body>
 </html>

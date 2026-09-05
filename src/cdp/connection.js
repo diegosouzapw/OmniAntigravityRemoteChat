@@ -35,6 +35,18 @@ export async function discoverCDP() {
                 console.log('Found Jetski/Launchpad target:', jetski.title);
                 return { port, url: jetski.webSocketDebuggerUrl };
             }
+
+            // Priority 3: Revamped Gemini-based Antigravity (local HTTPS app — title changes per conversation)
+            // Credit: Kelvin Tan (@kelverssg)
+            const gemini = list.find(t =>
+                t.type === 'page' &&
+                t.webSocketDebuggerUrl &&
+                t.url?.match(/^https?:\/\/127\.0\.0\.1:\d+/)
+            );
+            if (gemini?.webSocketDebuggerUrl) {
+                console.log('Found Gemini Antigravity target:', gemini.title || gemini.url);
+                return { port, url: gemini.webSocketDebuggerUrl };
+            }
         } catch (e) {
             errors.push(`${port}: ${/** @type {Error} */(e).message}`);
         }
@@ -44,7 +56,7 @@ export async function discoverCDP() {
 
 /**
  * Discover ALL available CDP targets across all ports (multi-window).
- * Only includes real editor workbench windows.
+ * Only includes real editor workbench windows or Gemini Antigravity page targets.
  *
  * @returns {Promise<import('../state.js').CDPTarget[]>}
  */
@@ -58,7 +70,9 @@ export async function discoverAllCDP() {
             for (const t of list) {
                 if (!t.webSocketDebuggerUrl) continue;
 
-                const isWorkbench = t.url?.includes('workbench.html') && !t.url?.includes('jetski');
+                // Support classic VS Code workbench or Gemini-based Antigravity local app pages
+                const isGeminiPage = t.type === 'page' && t.url?.match(/^https?:\/\/127\.0\.0\.1:\d+/);
+                const isWorkbench = (t.url?.includes('workbench.html') && !t.url?.includes('jetski')) || isGeminiPage;
                 if (!isWorkbench) continue;
 
                 const titleLower = (t.title || '').toLowerCase();
@@ -97,9 +111,15 @@ export async function connectCDP(url) {
     /** @type {Array<{id: number, name: string, origin: string}>} */
     const contexts = [];
     /** @type {Map<string, Set<(params: any) => void>>} */
-    const eventListeners = new Map();
-
     // Single centralized message handler
+    ws.on('close', () => {
+        for (const [id, { reject, timeoutId }] of pendingCalls.entries()) {
+            clearTimeout(timeoutId);
+            pendingCalls.delete(id);
+            try { reject(new Error('CDP connection closed')); } catch (_) {}
+        }
+    });
+
     ws.on('message', (msg) => {
         try {
             const data = JSON.parse(/** @type {string} */(msg.toString()));
@@ -113,7 +133,12 @@ export async function connectCDP(url) {
             }
 
             if (data.method === 'Runtime.executionContextCreated') {
-                contexts.push(data.params.context);
+                const ctx = data.params.context;
+                if (ctx.auxData?.isDefault) {
+                    contexts.unshift(ctx);
+                } else {
+                    contexts.push(ctx);
+                }
             } else if (data.method === 'Runtime.executionContextDestroyed') {
                 const id = data.params.executionContextId;
                 const idx = contexts.findIndex(c => c.id === id);

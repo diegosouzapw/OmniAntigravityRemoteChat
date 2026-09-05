@@ -36,6 +36,9 @@
   flex-direction: column;
   gap: var(--space-xs);
   padding: 0 var(--space-md) var(--safe-bottom);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 20;
 }
 
 .input-toolbar {
@@ -58,22 +61,155 @@
   color: var(--text-muted);
 }
 
+.history-workspace-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  margin: 10px var(--space-md) 4px var(--space-md);
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: var(--border-width) solid var(--border);
+  gap: 8px;
+}
+
+.history-workspace-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.history-workspace-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.history-workspace-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-switch-window-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.2s ease;
+}
+
+.history-switch-window-btn:active {
+  opacity: 0.7;
+}
+
 .history-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
   width: 100%;
   text-align: left;
   padding: 12px 14px;
   border-radius: 14px;
   border: var(--border-width) solid var(--border);
   background: var(--bg-card);
+  margin-bottom: 8px;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.history-item:active {
+  transform: scale(0.985);
 }
 
 .history-item.active {
   border-color: var(--accent-border);
   background: var(--accent-soft);
+}
+
+.history-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.history-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-title {
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-active-badge {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.history-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.history-workspace-chip {
+  max-width: 160px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+
+.history-time-chip {
+  opacity: 0.6;
+}
+
+.history-action-btn {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.history-item.active .history-action-btn {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
 }
 
 .stat-micro {
@@ -108,3 +244,167 @@
     grid-template-columns: 1fr min(420px, 38vw);
   }
 }
+
+/* Compact Mode chat layout rules */
+body.compact-mode .chat-container {
+  padding: 8px 12px 14px;
+}
+
+body.compact-mode .quick-actions {
+  padding: 4px 12px 4px;
+  gap: 4px;
+}
+
+body.compact-mode .snapshot-shell {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+body.compact-mode .snapshot-shell pre {
+  padding: 8px 10px;
+  margin: 6px 0;
+}
+
+/* Floating Action Card Slot */
+.action-card-slot {
+  width: 100%;
+  max-width: 100%;
+  max-height: 380px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transition: all var(--transition-normal);
+}
+
+.action-card-slot:empty {
+  display: none;
+}
+
+body.compact-mode .action-card-slot {
+  max-height: 280px;
+}
+
+/* ==========================================================================
+   Interactive Question Prompts (Mirrored Antigravity Ask Question & Grill-Me)
+   ========================================================================== */
+
+/* Disable layout sliding animations inside question radiogroups */
+div[role="radiogroup"],
+div[role="radiogroup"] > div,
+label[for^="ask-opt-"] {
+  animation: none !important;
+}
+
+label[for^="ask-opt-"] {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 12px 14px !important;
+  margin: 8px 0 !important;
+  background: var(--bg-card, rgba(255, 255, 255, 0.04)) !important;
+  border: 1.5px solid var(--border, rgba(148, 163, 184, 0.22)) !important;
+  border-radius: var(--radius-md, 12px) !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease !important;
+  box-sizing: border-box !important;
+}
+
+label[for^="ask-opt-"]:hover {
+  background: var(--bg-card-hover, rgba(255, 255, 255, 0.08)) !important;
+  border-color: var(--accent, #1d9bf0) !important;
+}
+
+/* Instant native touch response */
+label[for^="ask-opt-"]:active {
+  transform: scale(0.98) !important;
+}
+
+/* Selected state: high-contrast border, soft glow, and accent background */
+label[for^="ask-opt-"].omni-selected,
+label[for^="ask-opt-"][data-checked="true"],
+label[for^="ask-opt-"]:has(input:checked) {
+  background: var(--accent-soft, rgba(29, 155, 240, 0.16)) !important;
+  border-color: var(--accent, #1d9bf0) !important;
+  box-shadow: 0 0 0 1.5px var(--accent, #1d9bf0), 0 4px 16px rgba(29, 155, 240, 0.25) !important;
+}
+
+label[for^="ask-opt-"].omni-selected > span,
+label[for^="ask-opt-"][data-checked="true"] > span,
+label[for^="ask-opt-"]:has(input:checked) > span {
+  color: var(--text-main, #ffffff) !important;
+  font-weight: 600 !important;
+}
+
+/* Option ID badge (e.g. 1, 2, A1, A2) */
+label[for^="ask-opt-"] div.shrink-0 {
+  background: rgba(148, 163, 184, 0.15) !important;
+  color: var(--text-muted, #94a3b8) !important;
+  border: 1px solid rgba(148, 163, 184, 0.25) !important;
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease !important;
+}
+
+label[for^="ask-opt-"].omni-selected div.shrink-0,
+label[for^="ask-opt-"][data-checked="true"] div.shrink-0,
+label[for^="ask-opt-"]:has(input:checked) div.shrink-0 {
+  background: var(--accent, #1d9bf0) !important;
+  border-color: var(--accent, #1d9bf0) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 8px rgba(29, 155, 240, 0.5) !important;
+}
+
+label[for^="ask-opt-"].omni-selected div.shrink-0 span,
+label[for^="ask-opt-"][data-checked="true"] div.shrink-0 span,
+label[for^="ask-opt-"]:has(input:checked) div.shrink-0 span {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+/* Interactive Action Buttons (Continue, Submit, Skip) */
+button[data-testid="interaction-continue-button"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: var(--accent, #1d9bf0) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border-radius: var(--radius-md, 10px) !important;
+  padding: 10px 20px !important;
+  margin-top: 8px !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(29, 155, 240, 0.35) !important;
+  cursor: pointer !important;
+  transition: all 0.12s ease !important;
+}
+
+button[data-testid="interaction-continue-button"]:active,
+button[data-testid="interaction-continue-button"].omni-submitting {
+  transform: scale(0.96) !important;
+  filter: brightness(0.9) !important;
+}
+
+button[data-testid="interaction-skip-button"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+  color: var(--text-muted, #94a3b8) !important;
+  border-radius: var(--radius-md, 10px) !important;
+  padding: 10px 16px !important;
+  margin-top: 8px !important;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.22)) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+button[data-testid="interaction-skip-button"]:active {
+  transform: scale(0.96) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+

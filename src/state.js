@@ -32,6 +32,7 @@
  * @property {string} color
  * @property {string} fontFamily
  * @property {{scrollTop: number, scrollHeight: number, clientHeight: number, scrollPercent: number}} scrollInfo
+ * @property {string} [agentActivity] - Real-time activity description of the agent
  * @property {string} [error] - Error message if capture failed
  * @property {{nodes: number, htmlSize: number, cssSize: number}} stats
  */
@@ -44,6 +45,9 @@ export let lastSnapshot = null;
 
 /** @type {string | null} */
 export let lastSnapshotHash = null;
+
+/** @type {any | null} Currently detected interactive prompt */
+export let currentPendingAction = null;
 
 /** @type {CDPTarget[]} Multi-window: all discovered targets */
 export let availableTargets = [];
@@ -67,6 +71,9 @@ export function setLastSnapshot(snap) { lastSnapshot = snap; }
 /** @param {string | null} hash */
 export function setLastSnapshotHash(hash) { lastSnapshotHash = hash; }
 
+/** @param {any | null} action */
+export function setCurrentPendingAction(action) { currentPendingAction = action; }
+
 /** @param {CDPTarget[]} targets */
 export function setAvailableTargets(targets) { availableTargets = targets; }
 
@@ -75,3 +82,4 @@ export function setActiveTargetId(id) { activeTargetId = id; }
 
 /** @param {string} token */
 export function setAuthToken(token) { AUTH_TOKEN = token; }
+

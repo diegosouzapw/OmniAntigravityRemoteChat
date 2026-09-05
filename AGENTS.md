@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-**OmniAntigravity Remote Chat** (v1.3.0) is a premium mobile command center for Antigravity AI sessions.  
+**OmniAntigravity Remote Chat** (v1.4.1) is a premium mobile command center for Antigravity AI sessions.  
 Architecture: Node.js server connects to Antigravity via Chrome DevTools Protocol (CDP), mirrors the chat UI to a mobile browser via WebSocket, and adds remote workspace tools, supervisor intelligence, quota monitoring, and tunnel-based remote access.
 
 ## Tech Stack
@@ -72,15 +72,20 @@ scripts/
 
 test/
 ├── test.js                 — Integration/smoke test suite
-└── unit/                   — Vitest unit tests (9 test files)
+└── unit/                   — Vitest unit tests (13 test files, 102 tests)
+    ├── action-decision.test.js
     ├── config.test.js
     ├── hash.test.js
+    ├── mobile-viewport.test.js
     ├── network.test.js
     ├── quota-service.test.js
     ├── screenshot-timeline.test.js
+    ├── send-lock.test.js
     ├── session-stats.test.js
     ├── supervisor.test.js
-    └── telegram.test.js
+    ├── telegram.test.js
+    ├── upload-audio.test.js
+    └── upload-media.test.js
 
 launcher.js                 — Node.js entry point (QR code, tunnel orchestration)
 data/                       — Runtime data (quick-commands.json, screenshots/, uploads/)
@@ -104,6 +109,9 @@ docs/                       — Extended documentation (CODE_DOCUMENTATION, plan
 - **Telegram integration** — Lazy-loaded bot with commands, inline keyboards, rate-limiting, message threading
 - **Workspace tools** — File browser, terminal streaming, Git panel, assist chat, all via REST API
 - **Theme system** — 5 themes (dark, light, slate, pastel, rainbow) with CSS variables and persistence
+- **Lexical & Gemini Staging** — Supports Gemini Antigravity Lexical editor with input boundary staging validation and multi-tab fallback
+- **Concurrency Serialization** — Atomic Promise-chain locking (`withSendLock`) with SHA-256 deduplication and busy retry backoff
+- **Interactive Question Prompts** — Mirrors Antigravity `ask_question` and Grill-Me sessions with optimistic mobile tap feedback, illuminated option badges, and zero-cycling grace locks
 
 ## API Surface (60+ endpoints)
 

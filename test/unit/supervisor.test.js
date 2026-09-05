@@ -16,6 +16,7 @@ describe('supervisor heuristics', () => {
     expect(evaluateCommandHeuristics('rm -rf /tmp/cache')).toEqual({
       safe: false,
       reason: 'heuristic-risky-command',
+      riskLevel: 'critical',
     });
   });
 
@@ -29,6 +30,7 @@ describe('supervisor heuristics', () => {
     expect(evaluateCommandHeuristics('npm test')).toEqual({
       safe: true,
       reason: 'heuristic-safe-command',
+      riskLevel: 'safe',
     });
   });
 
@@ -40,6 +42,7 @@ describe('supervisor heuristics', () => {
     expect(evaluateCommandHeuristics('some-random-command')).toEqual({
       safe: false,
       reason: 'heuristic-unknown-command',
+      riskLevel: 'warning',
     });
   });
 

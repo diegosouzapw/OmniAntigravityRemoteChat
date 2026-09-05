@@ -124,6 +124,81 @@ tunnelStopBtn.addEventListener('click', stopTunnel);
 addCommandBtn.addEventListener('click', () => createCommandRow());
 saveCommandsBtn.addEventListener('click', saveCommands);
 
+// ─── Developer & Diagnostic Tools ──────────────────────────────────
+const toggleDevModeBtn = document.getElementById('toggleDevModeBtn');
+const adminDevStatus = document.getElementById('adminDevStatus');
+
+function updateDevModeUI() {
+  const isDev = localStorage.getItem('omni_dev_mode') === 'true';
+  if (toggleDevModeBtn) {
+    toggleDevModeBtn.textContent = isDev ? 'Disable Dev Mode' : 'Enable Dev Mode';
+    toggleDevModeBtn.className = isDev ? 'panel-btn danger' : 'panel-btn primary';
+  }
+  if (adminDevStatus) {
+    adminDevStatus.textContent = isDev
+      ? 'Developer Mode is ENABLED for this browser. Diagnostic menu is accessible in the chat view.'
+      : 'Developer Mode is DISABLED. Mobile chat displays clean production UI only.';
+  }
+}
+
+if (toggleDevModeBtn) {
+  toggleDevModeBtn.addEventListener('click', () => {
+    const isDev = localStorage.getItem('omni_dev_mode') === 'true';
+    if (isDev) {
+      localStorage.removeItem('omni_dev_mode');
+    } else {
+      localStorage.setItem('omni_dev_mode', 'true');
+    }
+    updateDevModeUI();
+  });
+}
+
+document.querySelectorAll('[data-status-mode]').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    const mode = btn.dataset.statusMode;
+    if (adminDevStatus) adminDevStatus.textContent = `Triggering status simulation: ${mode}...`;
+    try {
+      const res = await fetchWithAuth('/api/status/mock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (adminDevStatus) adminDevStatus.textContent = `Server response (${res.status}): ${data.error || 'Failed to trigger mock status'}`;
+      } else {
+        if (adminDevStatus) adminDevStatus.textContent = `Status simulation "${mode}" broadcast to all connected clients!`;
+      }
+    } catch (err) {
+      if (adminDevStatus) adminDevStatus.textContent = `Network error: ${err.message}`;
+    }
+  });
+});
+
+document.querySelectorAll('[data-action-type]').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    const type = btn.dataset.actionType;
+    if (adminDevStatus) adminDevStatus.textContent = `Triggering action mock: ${type}...`;
+    try {
+      const res = await fetchWithAuth('/api/action/mock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (adminDevStatus) adminDevStatus.textContent = `Server response (${res.status}): ${data.error || 'Failed to trigger mock action'}`;
+      } else {
+        if (adminDevStatus) adminDevStatus.textContent = `Mock action "${type}" generated and displayed on active mobile views!`;
+      }
+    } catch (err) {
+      if (adminDevStatus) adminDevStatus.textContent = `Network error: ${err.message}`;
+    }
+  });
+});
+
+updateDevModeUI();
 loadCommands();
 loadMetrics();
 setInterval(loadMetrics, 6000);
+

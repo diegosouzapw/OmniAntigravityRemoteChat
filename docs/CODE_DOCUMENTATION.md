@@ -1,4 +1,4 @@
-# CODE DOCUMENTATION — OmniAntigravity Remote Chat v1.3.0
+# CODE DOCUMENTATION — OmniAntigravity Remote Chat v1.4.0
 
 ## Project Structure
 
@@ -160,7 +160,7 @@ Single source of truth for all constants, environment variables, and feature fla
 | `getSupervisorSuggestMode()`| Runtime suggest-mode flag                           |
 | `getQuotaEnabled()`         | Runtime quota polling flag                          |
 | `getScreenshotEnabled()`    | Runtime screenshot timeline flag                    |
-| `VERSION`                   | Current version string (`1.3.0`)                    |
+| `VERSION`                   | Current version string (`1.4.0`)                    |
 
 ### src/env.js — Environment Bootstrap
 
@@ -251,11 +251,15 @@ Persistent screenshot capture system with disk storage, manifest tracking, and c
 
 | Function                   | Description                                                                         |
 | :------------------------- | :---------------------------------------------------------------------------------- |
-| `captureSnapshot()`        | Injects JS to clone chat DOM, extract CSS, enrich interactive elements             |
+| `captureSnapshot()`        | Injects JS to clone chat DOM, extract CSS, enrich interactive elements, and synchronize option selection states |
 | `checkErrorDialogs()`      | Scans all CDP contexts for error/quota/rate-limit dialogs                          |
-| `injectMessage()`          | Locates input field and simulates typing/submission via CDP                         |
+| `injectMessage()`          | Locates input field, verifies Lexical editor staging, and simulates typing/submission via CDP |
+| `injectMessageAnyTab()`    | Scans all open tabs across configured ports as fallback when primary editor is unfocused |
+| `withSendLock()`           | Atomic Promise-chain concurrency serializer with SHA-256 deduplication and busy backoff |
+| `scanInteractivePrompts()` | Detects native Antigravity `ask_question` and Grill-Me questionnaire prompts      |
+| `executeActionResponse()`  | Dispatches option selections, write-ins, and button clicks directly to desktop DOM  |
 | `setMode()` / `setModel()` | Text-based selectors to change AI settings remotely                                |
-| `clickElement()`           | Deterministic targeting with occurrence index + leaf-node filtering                 |
+| `clickElement()`           | Deterministic targeting with occurrence index + leaf-node filtering + input change dispatch |
 | `remoteScroll()`           | Syncs phone scroll position to Desktop chat container                              |
 | `stopGeneration()`         | Stops current AI generation via cancel button                                      |
 | `completePendingAction()`  | Executes accept/reject on pending CLI action                                       |

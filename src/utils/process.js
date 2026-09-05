@@ -96,7 +96,8 @@ export async function launchAntigravity() {
     }
 
     console.log(`Starting antigravity on port ${targetPort}...`);
-    const subprocess = spawn('antigravity', [`--port=${targetPort}`], {
+    const binary = process.platform === 'linux' ? 'antigravity-ide' : 'antigravity';
+    const subprocess = spawn(binary, [`--remote-debugging-port=${targetPort}`], {
         detached: true,
         stdio: 'ignore'
     });
