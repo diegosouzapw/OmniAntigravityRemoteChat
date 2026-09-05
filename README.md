@@ -11,7 +11,7 @@
 <br/>
 <br/>
 
-![Version](https://img.shields.io/badge/version-1.3.0-6366f1) ![Node](https://img.shields.io/badge/node-22%2B-10b981) ![CI](https://github.com/diegosouzapw/OmniAntigravityRemoteChat/actions/workflows/ci.yml/badge.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
+![Version](https://img.shields.io/badge/version-1.3.1-6366f1) ![Node](https://img.shields.io/badge/node-22%2B-10b981) ![CI](https://github.com/diegosouzapw/OmniAntigravityRemoteChat/actions/workflows/ci.yml/badge.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
 [![npm](https://img.shields.io/npm/v/omni-antigravity-remote-chat?color=cc3534&logo=npm)](https://www.npmjs.com/package/omni-antigravity-remote-chat) [![npm downloads](https://img.shields.io/npm/dm/omni-antigravity-remote-chat?color=blue&logo=npm)](https://www.npmjs.com/package/omni-antigravity-remote-chat) [![Docker](https://img.shields.io/docker/pulls/diegosouzapw/omni-antigravity-remote-chat?color=2496ED&logo=docker&logoColor=white)](https://hub.docker.com/r/diegosouzapw/omni-antigravity-remote-chat)
 
@@ -50,13 +50,16 @@ npx omni-antigravity-remote-chat
 
 That's it. Open the URL on your phone. You're in. 🚀
 
-### New in 1.3.0
+### What's New
 
-- **Content Security Policy** — Strict CSP with zero inline JS, enforced via header + meta tags
-- **Pinggy tunnel support** — SSH-based tunneling with zero binary dependencies
-- **Leaf-node targeting** — Precise DOM click targeting with occurrence index tracking
-- **Multi-tunnel management** — Cloudflare and Pinggy with automatic fallback
-- **Design Philosophy document** — 10 core principles guiding architecture decisions
+- 🎙️ **Native Voice Memos** — Record and attach voice instructions directly from your phone's microphone for Gemini multimodal processing.
+- 📋 **Interactive Plan & Action Decision Remote System** — Review Antigravity implementation plans in a dedicated mobile drawer, proceed with 1-tap, snooze, or submit review feedback remotely.
+- 🛑 **Better Explicit STOP Button** — Enhanced active STOP button with an explicit, sober crimson satin finish and gentle ambient breathing pulse when the agent is actively generating, deactivating immediately upon turn completion.
+- 🔔 **LIVE Badge & Agent Status** — Improved LIVE status badge reflecting real-time Antigravity connection and agent activity (Idle, Working, Thinking) with interactive toast details on tap.
+- 📱 **Mobile Viewport & Keyboard Resizing** — Dynamic height and virtual keyboard adaptation with `interactive-widget=resizes-content` and full safe-area inset protection for notches and Dynamic Islands.
+- 🖼️ **Image & Media Attachments** — Upload screenshots and media directly from your phone into the desktop Antigravity session.
+- 📦 **PWA Icon & Shell Hardening** — Fixed missing PWA icons on mobile home screens and browser tabs with full manifest caching and favicon links.
+- 🧪 **Developer Mode & Diagnostic Tools** — Isolated simulation tools in the Admin panel for status dots and mock actions; zero test clutter in the production UI.
 
 ---
 
@@ -124,6 +127,10 @@ antigravity . --remote-debugging-port=7800
 | 💬  | **Assist Workspace**   | Ask the supervisor for summaries, context and next actions               |
 | 🖼️  | **Timeline**           | Keep a persistent screenshot history with manual and automatic captures  |
 | 📱  | **Telegram Alerts**    | Get push notifications for Blocks, Task completion and Pending actions   |
+| 🎙️  | **Native Voice Memos** | Record audio on your phone and attach directly for Gemini multimodal processing |
+| 📋  | **Plan Review Drawer** | Review implementation plans, submit feedback, or approve with 1-tap from your phone |
+| 🖼️  | **Media Attachments**  | Upload screenshots and diagrams directly into the chat prompt from mobile |
+| 🧪  | **Developer Mode**     | Isolated simulation and diagnostics via the Admin panel without production UI clutter |
 | 📋  | **Chat history**       | Browse and resume past conversations on mobile                           |
 | 🔒  | **Secure by default**  | HTTPS, CSP, password auth, cookie sessions, LAN auto-auth               |
 | 🌐  | **Remote access**      | Cloudflare, Pinggy, ngrok tunnels with QR code — access from anywhere   |
@@ -263,6 +270,7 @@ cp .env.example .env
 | `TELEGRAM_BOT_TOKEN`              | _(optional)_       | Telegram bot token for push notifications       |
 | `TELEGRAM_CHAT_ID`                | _(optional)_       | Telegram chat ID for notifications              |
 | `TELEGRAM_RATE_LIMIT`             | `30`               | Max Telegram messages per minute                |
+| `ENABLE_DEV_MOCKS`                | `false` (prod) / `true` (dev) | Enable developer mock routes (`/api/action/mock`, `/api/status/mock`) |
 
 ---
 
@@ -303,7 +311,7 @@ cp .env.example .env
 │   └── css/                   # Modular CSS (8 files, 5 themes)
 ├── launcher.js                # QR code + tunnel orchestration
 ├── scripts/                   # SSL, tunnel managers, context menu, WSL
-├── test/                      # Smoke tests + Vitest unit tests (9 files)
+├── test/                      # Smoke tests + Vitest unit tests (12 files, 92 tests)
 ├── Dockerfile                 # Docker support (node:22-alpine)
 └── .github/workflows/         # CI + auto-release + Docker Hub
 ```

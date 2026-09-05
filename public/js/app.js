@@ -6,10 +6,12 @@ import { StatsPanel } from './components/stats-panel.js';
 import { AssistPanel } from './components/assist-panel.js';
 import { TimelinePanel } from './components/timeline-panel.js';
 
-const MODELS = [
-  'Gemini 3.1 Pro (High)',
-  'Gemini 3.1 Pro (Low)',
-  'Gemini 3 Flash',
+const DEFAULT_MODELS = [
+  'Gemini 3.8 Flash High',
+  'Gemini 3.7 Flash Medium',
+  'Gemini 3.6 Flash Medium',
+  'Gemini 3.1 Pro High',
+  'Gemini 3.1 Pro Low',
   'Claude Sonnet 4.6 (Thinking)',
   'Claude Opus 4.6 (Thinking)',
   'GPT-OSS 120B (Medium)',
@@ -37,6 +39,8 @@ const scrollToBottomBtn = document.getElementById('scrollToBottom');
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
 const statsText = document.getElementById('statsText');
+const overflowMenuBtn = document.getElementById('overflowMenuBtn');
+const headerOverflowDropdown = document.getElementById('headerOverflowDropdown');
 const modeBtn = document.getElementById('modeBtn');
 const modelBtn = document.getElementById('modelBtn');
 const targetBtn = document.getElementById('targetBtn');
@@ -72,6 +76,16 @@ const imageInput = document.getElementById('imageInput');
 const sslBanner = document.getElementById('sslBanner');
 const enableHttpsBtn = document.getElementById('enableHttpsBtn');
 const dismissSslBtn = document.getElementById('dismissSslBtn');
+const voiceMemoSettingBtn = document.getElementById('voiceMemoSettingBtn');
+const voiceMemoSettingText = document.getElementById('voiceMemoSettingText');
+const compactModeBtn = document.getElementById('compactModeBtn');
+const compactModeText = document.getElementById('compactModeText');
+const voiceMemoBtn = document.getElementById('voiceMemoBtn');
+const voiceRecordingBar = document.getElementById('voiceRecordingBar');
+const recordingTimer = document.getElementById('recordingTimer');
+const cancelRecordBtn = document.getElementById('cancelRecordBtn');
+const doneRecordBtn = document.getElementById('doneRecordBtn');
+const stagedMediaSlot = document.getElementById('stagedMediaSlot');
 
 const state = {
   ws: null,
@@ -298,12 +312,13 @@ function applyTheme(theme, persist = true) {
   if (persist) {
     localStorage.setItem('omni-theme', theme);
   }
-  const themeColor = getComputedStyle(document.documentElement)
-    .getPropertyValue('--accent')
-    .trim();
+  const styles = getComputedStyle(document.documentElement);
+  const headerBg = styles.getPropertyValue('--bg-header').trim() ||
+                   styles.getPropertyValue('--bg-body').trim() ||
+                   styles.getPropertyValue('--accent').trim();
   const themeMeta = document.querySelector('meta[name="theme-color"]');
-  if (themeMeta && themeColor) {
-    themeMeta.setAttribute('content', themeColor);
+  if (themeMeta && headerBg) {
+    themeMeta.setAttribute('content', headerBg);
   }
 }
 
@@ -342,10 +357,180 @@ function dismissSslBanner() {
   localStorage.setItem('sslBannerDismissed', 'true');
 }
 
+let isCDPConnected = false;
+let currentAgentActivity = 'Idle';
+let statusTestTimer = null;
+let isStatusTestActive = false;
+
+function isActiveWorkState(activity) {
+  if (!activity) return false;
+  const lower = activity.toLowerCase().trim();
+  if (lower === 'idle') return false;
+  if (
+    lower.startsWith('worked for') ||
+    lower.startsWith('completed') ||
+    lower.startsWith('done') ||
+    lower.startsWith('finished')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function applyStatusDisplay(connected, activity) {
+  const statusBadge = document.getElementById('statusBadge');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  if (!statusBadge || !statusDot || !statusText) return;
+
+  statusDot.className = 'status-dot';
+  statusBadge.className = 'status-badge';
+
+  if (!connected) {
+    statusDot.classList.add('disconnected');
+    statusBadge.classList.add('offline');
+    statusText.textContent = 'Reconnecting';
+    statusText.style.display = 'inline';
+    statusBadge.title = 'Antigravity Offline · Reconnecting...';
+    stopBtn?.classList.remove('active');
+    return;
+  }
+
+  // Connected (Live)
+  statusDot.classList.add('connected');
+  const isWorking = isActiveWorkState(activity);
+
+  if (isWorking) {
+    statusDot.classList.add('working');
+    statusBadge.classList.add('active');
+    statusText.textContent = activity;
+    statusText.style.display = 'inline';
+    statusBadge.title = `Live · ${activity}`;
+    stopBtn?.classList.add('active');
+  } else {
+    // When live and idle, no text needed! Just the compact pulsing dot
+    statusDot.classList.add('idle');
+    statusBadge.classList.add('compact');
+    statusText.textContent = '';
+    statusText.style.display = 'none';
+    statusBadge.title = 'CDP Live · Ready';
+    stopBtn?.classList.remove('active');
+  }
+}
+
+function updateUnifiedStatus() {
+  if (isStatusTestActive) return;
+  applyStatusDisplay(isCDPConnected, currentAgentActivity);
+}
+
+function testStatus(mode = 'cycle', customText, durationMs = 12000) {
+  if (statusTestTimer) {
+    clearTimeout(statusTestTimer);
+    statusTestTimer = null;
+  }
+
+  isStatusTestActive = true;
+
+  if (mode === 'reset') {
+    isStatusTestActive = false;
+    updateUnifiedStatus();
+    showSlideInNotification('Status test reset to live state', 'info');
+    return;
+  }
+
+  if (mode === 'live' || mode === 'idle') {
+    applyStatusDisplay(true, 'Idle');
+    showSlideInNotification('Demo: Live & Idle (compact pulse dot)', 'success');
+    statusTestTimer = setTimeout(() => {
+      isStatusTestActive = false;
+      updateUnifiedStatus();
+    }, durationMs || 5000);
+    return;
+  }
+
+  if (mode === 'working') {
+    const text = customText || 'Working...';
+    applyStatusDisplay(true, text);
+    showSlideInNotification(`Demo: Active (${text}) dual animated dot`, 'info');
+    statusTestTimer = setTimeout(() => {
+      isStatusTestActive = false;
+      updateUnifiedStatus();
+    }, durationMs || 5000);
+    return;
+  }
+
+  if (mode === 'thinking') {
+    const text = customText || 'Thinking...';
+    applyStatusDisplay(true, text);
+    showSlideInNotification(`Demo: Active (${text}) dual animated dot`, 'info');
+    statusTestTimer = setTimeout(() => {
+      isStatusTestActive = false;
+      updateUnifiedStatus();
+    }, durationMs || 5000);
+    return;
+  }
+
+  if (mode === 'reconnecting' || mode === 'offline') {
+    applyStatusDisplay(false, '');
+    showSlideInNotification('Demo: Disconnected (warning pulse dot)', 'warning');
+    statusTestTimer = setTimeout(() => {
+      isStatusTestActive = false;
+      updateUnifiedStatus();
+    }, durationMs || 5000);
+    return;
+  }
+
+  // mode === 'cycle'
+  showSlideInNotification('Status demo: Cycling Live ➔ Working ➔ Thinking ➔ Reconnecting', 'info');
+  const steps = [
+    { fn: () => applyStatusDisplay(true, 'Idle'), desc: 'Live & Idle' },
+    { fn: () => applyStatusDisplay(true, customText || 'Working...'), desc: 'Live · Working...' },
+    { fn: () => applyStatusDisplay(true, 'Thinking...'), desc: 'Live · Thinking...' },
+    { fn: () => applyStatusDisplay(false, ''), desc: 'Reconnecting (Warning)' }
+  ];
+
+  let stepIndex = 0;
+  const stepDuration = Math.max(2500, Math.floor((durationMs || 12000) / steps.length));
+
+  function runNextStep() {
+    if (stepIndex >= steps.length) {
+      isStatusTestActive = false;
+      updateUnifiedStatus();
+      showSlideInNotification('Demo cycle complete · Live state restored', 'success');
+      return;
+    }
+    const current = steps[stepIndex++];
+    current.fn();
+    statusTestTimer = setTimeout(runNextStep, stepDuration);
+  }
+
+  runNextStep();
+}
+
+const isDevMode =
+  localStorage.getItem('omni_dev_mode') === 'true' ||
+  new URLSearchParams(window.location.search).has('dev');
+
+if (isDevMode) {
+  window.omniDev = {
+    testStatus,
+    disable: () => {
+      localStorage.removeItem('omni_dev_mode');
+      window.location.reload();
+    }
+  };
+} else {
+  window.omniEnableDevMode = () => {
+    localStorage.setItem('omni_dev_mode', 'true');
+    window.location.reload();
+  };
+}
+
 function updateStatus(connected) {
-  statusDot.classList.toggle('connected', connected);
-  statusDot.classList.toggle('disconnected', !connected);
-  statusText.textContent = connected ? 'Live' : 'Reconnecting';
+  isCDPConnected = !!connected;
+  if (!isStatusTestActive) {
+    updateUnifiedStatus();
+  }
 }
 
 function showSlideInNotification(message, type = 'info') {
@@ -372,48 +557,826 @@ function showSlideInNotification(message, type = 'info') {
   }, 4500);
 }
 
-function showActionRequiredPrompt(message) {
-  if (document.getElementById('action-prompt-layer')) return;
-  const layer = document.createElement('div');
-  layer.id = 'action-prompt-layer';
-  layer.className = 'modal-overlay show';
-  layer.innerHTML = `
-    <div class="modal-panel">
-      <div class="modal-title">Action Required</div>
-      <div class="panel-subtitle modal-copy">${message}</div>
-      <div class="screen-actions">
-        <button class="panel-btn danger" data-action="reject">Reject</button>
-        <button class="panel-btn primary" data-action="accept">Accept</button>
-      </div>
-    </div>
-  `;
-  layer.querySelectorAll('button[data-action]').forEach((button) => {
-    button.addEventListener('click', () =>
-      handleActionInteract(button.getAttribute('data-action'), button)
-    );
-  });
-  document.body.appendChild(layer);
+let activeActionData = null;
+let actionConfirmTimeout = null;
+let snoozedActionId = null;
+let currentPlanData = null;
+const actedActionIds = new Set();
+
+/**
+ * Lightweight, safe Markdown-to-HTML parser for implementation plans.
+ * Supports headings, alerts, code blocks, tables, checklists, lists, and inline styles.
+ *
+ * @param {string} markdown
+ * @returns {string} Safe HTML string
+ */
+function renderPlanMarkdown(markdown) {
+  if (!markdown) return '<p><em>No implementation plan content available.</em></p>';
+
+  const lines = String(markdown).replace(/\r\n/g, '\n').split('\n');
+  const out = [];
+  let inCode = false;
+  let codeLang = '';
+  let codeBuffer = [];
+  let inList = false;
+  let listType = 'ul';
+  let inTable = false;
+
+  const closeListIfNeeded = () => {
+    if (inList) {
+      out.push(listType === 'ul' ? '</ul>' : '</ol>');
+      inList = false;
+    }
+  };
+
+  const closeTableIfNeeded = () => {
+    if (inTable) {
+      out.push('</tbody></table></div>');
+      inTable = false;
+    }
+  };
+
+  const formatInline = (str) => {
+    return str
+      .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+      .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+
+    // Fenced code blocks
+    if (rawLine.trim().startsWith('```')) {
+      if (!inCode) {
+        closeListIfNeeded();
+        closeTableIfNeeded();
+        inCode = true;
+        codeLang = rawLine.trim().slice(3).trim() || 'text';
+        codeBuffer = [];
+        continue;
+      } else {
+        inCode = false;
+        const codeEscaped = escapeHtml(codeBuffer.join('\n'));
+        out.push(
+          `<div class="plan-code-block">` +
+            `<div class="plan-code-header"><span>${escapeHtml(codeLang)}</span></div>` +
+            `<pre><code class="language-${escapeHtml(codeLang)}">${codeEscaped}</code></pre>` +
+          `</div>`
+        );
+        continue;
+      }
+    }
+
+    if (inCode) {
+      codeBuffer.push(rawLine);
+      continue;
+    }
+
+    const trimmed = rawLine.trim();
+
+    // Blank line
+    if (!trimmed) {
+      closeListIfNeeded();
+      closeTableIfNeeded();
+      continue;
+    }
+
+    // Horizontal Rule
+    if (/^(---|___|\*\*\*)$/.test(trimmed)) {
+      closeListIfNeeded();
+      closeTableIfNeeded();
+      out.push('<hr />');
+      continue;
+    }
+
+    // GitHub-Style Alerts: > [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]
+    const alertMatch = trimmed.match(/^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$/i);
+    if (alertMatch) {
+      closeListIfNeeded();
+      closeTableIfNeeded();
+      const type = alertMatch[1].toLowerCase();
+      let alertContent = alertMatch[2] ? escapeHtml(alertMatch[2]) : '';
+
+      while (i + 1 < lines.length && lines[i + 1].trim().startsWith('>')) {
+        i++;
+        const nextQuote = lines[i].trim().replace(/^>\s?/, '');
+        alertContent += (alertContent ? '<br>' : '') + formatInline(escapeHtml(nextQuote));
+      }
+
+      const iconMap = {
+        note: 'ℹ️',
+        tip: '💡',
+        important: '🔔',
+        warning: '⚠️',
+        caution: '🛑'
+      };
+
+      out.push(
+        `<div class="plan-alert ${type}">` +
+          `<div class="plan-alert-title">${iconMap[type] || 'ℹ️'} ${type.toUpperCase()}</div>` +
+          `<div class="plan-alert-body">${alertContent}</div>` +
+        `</div>`
+      );
+      continue;
+    }
+
+    // Regular Blockquotes
+    if (trimmed.startsWith('>')) {
+      closeListIfNeeded();
+      closeTableIfNeeded();
+      const quoteText = trimmed.replace(/^>\s?/, '');
+      out.push(`<blockquote>${formatInline(escapeHtml(quoteText))}</blockquote>`);
+      continue;
+    }
+
+    // Headings (# H1 to #### H4)
+    if (trimmed.startsWith('#')) {
+      closeListIfNeeded();
+      closeTableIfNeeded();
+      const level = Math.min(trimmed.match(/^#+/)[0].length, 4);
+      const text = trimmed.slice(level).trim();
+      const hTag = 'h' + level;
+      out.push(`<${hTag}>${formatInline(escapeHtml(text))}</${hTag}>`);
+      continue;
+    }
+
+    // Tables: | col1 | col2 |
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      closeListIfNeeded();
+      const cells = trimmed.split('|').slice(1, -1).map(c => c.trim());
+
+      if (cells.every(c => /^[-:]+$/.test(c))) {
+        continue;
+      }
+
+      if (!inTable) {
+        inTable = true;
+        out.push('<div class="plan-table-wrap"><table class="plan-table"><thead><tr>');
+        cells.forEach(c => {
+          out.push(`<th>${formatInline(escapeHtml(c))}</th>`);
+        });
+        out.push('</tr></thead><tbody>');
+        continue;
+      } else {
+        out.push('<tr>');
+        cells.forEach(c => {
+          out.push(`<td>${formatInline(escapeHtml(c))}</td>`);
+        });
+        out.push('</tr>');
+        continue;
+      }
+    } else {
+      closeTableIfNeeded();
+    }
+
+    // Unordered list items (- or *)
+    const ulMatch = trimmed.match(/^[-*]\s+(.*)$/);
+    if (ulMatch) {
+      if (!inList || listType !== 'ul') {
+        closeListIfNeeded();
+        inList = true;
+        listType = 'ul';
+        out.push('<ul>');
+      }
+      let itemContent = ulMatch[1];
+      if (itemContent.startsWith('[ ] ')) {
+        itemContent = '☐ ' + itemContent.slice(4);
+      } else if (itemContent.startsWith('[x] ') || itemContent.startsWith('[X] ')) {
+        itemContent = '☑ ' + itemContent.slice(4);
+      }
+      out.push(`<li>${formatInline(escapeHtml(itemContent))}</li>`);
+      continue;
+    }
+
+    // Ordered list items (1. )
+    const olMatch = trimmed.match(/^\d+\.\s+(.*)$/);
+    if (olMatch) {
+      if (!inList || listType !== 'ol') {
+        closeListIfNeeded();
+        inList = true;
+        listType = 'ol';
+        out.push('<ol>');
+      }
+      out.push(`<li>${formatInline(escapeHtml(olMatch[1]))}</li>`);
+      continue;
+    }
+
+    // Paragraph
+    closeListIfNeeded();
+    out.push(`<p>${formatInline(escapeHtml(trimmed))}</p>`);
+  }
+
+  closeListIfNeeded();
+  closeTableIfNeeded();
+
+  return `<div class="plan-md">${out.join('\n')}</div>`;
 }
 
-async function handleActionInteract(action, button) {
-  button.disabled = true;
+/**
+ * Opens the mobile implementation plan preview modal.
+ */
+async function openPlanPreviewModal() {
+  const modal = document.getElementById('planPreviewModal');
+  const body = document.getElementById('planPreviewBody');
+  const subtitle = document.getElementById('planPreviewSubtitle');
+  const drawer = document.getElementById('planPreviewReviewDrawer');
+  const reviewInput = document.getElementById('planPreviewFeedbackInput');
+  if (!modal || !body) return;
+
+  modal.classList.add('show');
+  modal.setAttribute('aria-hidden', 'false');
+  if (drawer) drawer.style.display = 'none';
+  if (reviewInput) reviewInput.value = '';
+
+  body.innerHTML = `
+    <div class="plan-preview-loading">
+      <div class="plan-preview-spinner"></div>
+      <span>Loading implementation plan...</span>
+    </div>
+  `;
+
   try {
-    const response = await fetchWithAuth('/api/interact-action', {
+    const res = await fetchWithAuth('/api/plan');
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      body.innerHTML = `
+        <div class="plan-alert warning">
+          <div class="plan-alert-title">⚠️ Notice</div>
+          <div class="plan-alert-body">${escapeHtml(data.error || 'No implementation plan currently found on disk.')}</div>
+        </div>
+      `;
+      if (subtitle) subtitle.textContent = 'Plan not found';
+      return;
+    }
+
+    currentPlanData = data;
+    const timeStr = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'recently';
+    const filename = data.path ? data.path.split('/').slice(-2).join('/') : 'implementation_plan.md';
+    if (subtitle) {
+      subtitle.textContent = `${filename} · Updated ${timeStr}`;
+    }
+
+    body.innerHTML = renderPlanMarkdown(data.content);
+
+    if (window.Prism) {
+      try { window.Prism.highlightAllUnder(body); } catch (_) {}
+    }
+  } catch (err) {
+    body.innerHTML = `
+      <div class="plan-alert caution">
+        <div class="plan-alert-title">Error</div>
+        <div class="plan-alert-body">${escapeHtml(err.message || 'Failed to load implementation plan')}</div>
+      </div>
+    `;
+    if (subtitle) subtitle.textContent = 'Error loading plan';
+  }
+}
+
+/**
+ * Closes the mobile implementation plan preview modal.
+ */
+function closePlanPreviewModal() {
+  const modal = document.getElementById('planPreviewModal');
+  if (!modal) return;
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden', 'true');
+  const drawer = document.getElementById('planPreviewReviewDrawer');
+  if (drawer) drawer.style.display = 'none';
+}
+
+/**
+ * Sets up global button listeners for the plan preview modal.
+ */
+function setupPlanPreviewModal() {
+  const modal = document.getElementById('planPreviewModal');
+  const closeBtn = document.getElementById('planPreviewCloseBtn');
+  const laterBtn = document.getElementById('planPreviewLaterBtn');
+  const reviewBtn = document.getElementById('planPreviewReviewBtn');
+  const proceedBtn = document.getElementById('planPreviewProceedBtn');
+  const drawer = document.getElementById('planPreviewReviewDrawer');
+  const drawerCancelBtn = document.getElementById('planPreviewReviewCancelBtn');
+  const drawerSubmitBtn = document.getElementById('planPreviewReviewSubmitBtn');
+  const feedbackInput = document.getElementById('planPreviewFeedbackInput');
+
+  closeBtn?.addEventListener('click', () => {
+    closePlanPreviewModal();
+  });
+
+  laterBtn?.addEventListener('click', () => {
+    closePlanPreviewModal();
+    if (activeActionData) {
+      snoozedActionId = activeActionData.id;
+      const slot = document.getElementById('actionCardSlot');
+      if (slot) {
+        slot.innerHTML = `
+          <div class="plan-snooze-chip" id="planSnoozeResumeBtn" title="Tap to resume plan approval">
+            <span>📋 ${escapeHtml(activeActionData.title || 'Plan Approval')}</span>
+            <span style="font-weight: normal; opacity: 0.85;">· Tap to review</span>
+          </div>
+        `;
+        document.getElementById('planSnoozeResumeBtn')?.addEventListener('click', () => {
+          snoozedActionId = null;
+          renderActionCard(activeActionData);
+        });
+      }
+    }
+  });
+
+  reviewBtn?.addEventListener('click', () => {
+    if (drawer) {
+      const isVisible = drawer.style.display !== 'none';
+      drawer.style.display = isVisible ? 'none' : 'block';
+      if (!isVisible && feedbackInput) {
+        setTimeout(() => feedbackInput.focus(), 60);
+      }
+    }
+  });
+
+  drawerCancelBtn?.addEventListener('click', () => {
+    if (drawer) drawer.style.display = 'none';
+  });
+
+  drawerSubmitBtn?.addEventListener('click', async () => {
+    const feedback = feedbackInput?.value?.trim() || '';
+    drawerSubmitBtn.disabled = true;
+    drawerSubmitBtn.textContent = 'Submitting...';
+    try {
+      await respondToInteractiveAction({
+        actionId: activeActionData?.id || 'plan-approval',
+        type: 'plan',
+        decision: 'review',
+        feedback
+      });
+      closePlanPreviewModal();
+    } finally {
+      drawerSubmitBtn.disabled = false;
+      drawerSubmitBtn.textContent = 'Submit Review';
+    }
+  });
+
+  proceedBtn?.addEventListener('click', async () => {
+    proceedBtn.disabled = true;
+    proceedBtn.textContent = 'Starting...';
+    try {
+      await respondToInteractiveAction({
+        actionId: activeActionData?.id || 'plan-approval',
+        type: 'plan',
+        decision: 'proceed'
+      });
+      closePlanPreviewModal();
+    } finally {
+      proceedBtn.disabled = false;
+      proceedBtn.textContent = 'Proceed with Plan';
+    }
+  });
+
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closePlanPreviewModal();
+    }
+  });
+}
+
+function updateAgentActivity(activityText) {
+  currentAgentActivity = (activityText || 'Idle').trim();
+  if (!isStatusTestActive) {
+    updateUnifiedStatus();
+  }
+}
+
+function renderActionCard(actionData) {
+  const slot = document.getElementById('actionCardSlot');
+  if (!slot) return;
+
+  if (!actionData) {
+    if (activeActionData || document.getElementById('floatingActionCard') || document.getElementById('planSnoozeResumeBtn')) {
+      slot.innerHTML = '';
+      activeActionData = null;
+    }
+    return;
+  }
+
+  // If this action was already acted on, do not display the card
+  if (actedActionIds.has(actionData.id)) {
+    if (activeActionData || document.getElementById('floatingActionCard')) {
+      slot.innerHTML = '';
+      activeActionData = null;
+    }
+    return;
+  }
+
+  // If user snoozed this action with "Later", render the compact resume chip
+  if (snoozedActionId === actionData.id) {
+    activeActionData = actionData;
+    if (!document.getElementById('planSnoozeResumeBtn')) {
+      slot.innerHTML = `
+        <div class="plan-snooze-chip" id="planSnoozeResumeBtn" title="Tap to resume plan approval">
+          <span>📋 ${escapeHtml(actionData.title || 'Plan Approval')}</span>
+          <span style="font-weight: normal; opacity: 0.85;">· Tap to review</span>
+        </div>
+      `;
+      document.getElementById('planSnoozeResumeBtn')?.addEventListener('click', () => {
+        snoozedActionId = null;
+        renderActionCard(actionData);
+      });
+    }
+    return;
+  }
+
+  // Prevent re-rendering identical prompt ID unless changed
+  const existingCard = document.getElementById('floatingActionCard');
+  if (existingCard && (existingCard.getAttribute('data-action-id') === actionData.id || (activeActionData && activeActionData.id === actionData.id))) {
+    return;
+  }
+  activeActionData = actionData;
+
+  // Sensory haptic feedback on mobile
+  if (navigator.vibrate) {
+    try { navigator.vibrate([20, 40, 20]); } catch (_) {}
+  }
+
+  const {
+    id,
+    type,
+    title,
+    riskLevel,
+    riskReason,
+    command,
+    options,
+    isMultiSelect,
+    hasWriteIn,
+    summary,
+    proceedText,
+    acceptText,
+    rejectText,
+    submitText,
+    skipText
+  } = actionData;
+
+  // Risk Badge HTML
+  let riskBadgeHtml = '';
+  if (type === 'command') {
+    const level = riskLevel || 'warning';
+    const label = level === 'critical' ? '🔴 Critical' : level === 'safe' ? '🟢 Safe' : '🟡 Warning';
+    riskBadgeHtml = `<span class="risk-badge ${level}" title="${escapeHtml(riskReason || '')}">${label}</span>`;
+  }
+
+  let bodyHtml = '';
+  if (type === 'command') {
+    bodyHtml = `
+      <div class="action-cmd-box">
+        <pre class="action-cmd-text"><code id="actionCmdSnippet">${escapeHtml(command || '')}</code></pre>
+        <button class="action-cmd-copy-btn" id="actionCmdCopyBtn" type="button" title="Copy command" aria-label="Copy command">📋</button>
+      </div>
+    `;
+  } else if (type === 'question') {
+    const opts = options || [];
+    const optionsHtml = opts.map((opt, idx) => `
+      <div class="action-option-pill ${isMultiSelect ? 'multi' : ''}" data-idx="${idx}">
+        <span class="action-option-indicator"></span>
+        <span class="action-option-text">${escapeHtml(opt.text || '')}</span>
+      </div>
+    `).join('');
+
+    bodyHtml = `
+      <div class="action-options-list" id="actionOptionsList">
+        ${optionsHtml}
+      </div>
+      ${hasWriteIn !== false ? `<input type="text" class="action-writein-input" id="actionWriteInInput" placeholder="Custom response (optional)..." />` : ''}
+    `;
+  } else if (type === 'plan') {
+    bodyHtml = `
+      <div class="action-plan-summary">
+        ${escapeHtml(summary || "Implementation plan is ready. Review details or proceed with execution.")}
+      </div>
+      <button type="button" class="action-plan-preview-btn" id="actionBtnPreviewPlan" aria-label="Preview Implementation Plan">
+        <div class="action-plan-preview-left">
+          <span class="action-plan-preview-icon">📖</span>
+          <div>
+            <div class="action-plan-preview-title">Preview Implementation Plan</div>
+            <div class="action-plan-preview-sub">Tap to review full plan &amp; diffs</div>
+          </div>
+        </div>
+        <span class="action-plan-preview-arrow">➔</span>
+      </button>
+      <div class="action-plan-review-box" id="actionPlanReviewBox" style="display: none;">
+        <label for="actionPlanFeedbackInput" class="action-plan-review-label">Ask modifications or questions:</label>
+        <textarea class="action-plan-feedback-input" id="actionPlanFeedbackInput" placeholder="e.g. Can we adjust X or add test coverage for Y?"></textarea>
+        <div class="action-plan-review-actions">
+          <button type="button" class="action-card-btn secondary" id="actionPlanReviewCancelBtn">Cancel</button>
+          <button type="button" class="action-card-btn primary" id="actionPlanReviewSubmitBtn">Submit Review</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // Footer Buttons
+  let footerHtml = '';
+  if (type === 'command') {
+    const isCritical = riskLevel === 'critical';
+    const primaryClass = isCritical ? 'action-card-btn danger' : 'action-card-btn primary';
+    footerHtml = `
+      <div class="action-card-footer">
+        <button type="button" class="action-card-btn secondary" id="actionBtnReject">${escapeHtml(rejectText || 'Reject')}</button>
+        <button type="button" class="${primaryClass}" id="actionBtnAccept" data-critical="${isCritical}">${escapeHtml(acceptText || 'Run')}</button>
+      </div>
+    `;
+  } else if (type === 'question') {
+    footerHtml = `
+      <div class="action-card-footer">
+        ${skipText ? `<button type="button" class="action-card-btn secondary" id="actionBtnSkip">${escapeHtml(skipText)}</button>` : ''}
+        <button type="button" class="action-card-btn primary" id="actionBtnSubmit">${escapeHtml(submitText || 'Submit')}</button>
+      </div>
+    `;
+  } else if (type === 'plan') {
+    footerHtml = `
+      <div class="action-card-footer" id="actionPlanFooter">
+        <button type="button" class="action-card-btn secondary" id="actionBtnDismiss">Later</button>
+        <button type="button" class="action-card-btn secondary" id="actionBtnReview">${escapeHtml(actionData.reviewText || 'Review')}</button>
+        <button type="button" class="action-card-btn primary" id="actionBtnProceed">${escapeHtml(proceedText || 'Proceed with Plan')}</button>
+      </div>
+    `;
+  }
+
+  slot.innerHTML = `
+    <div class="floating-action-card" id="floatingActionCard" data-action-id="${id}">
+      <div class="action-card-handle" title="Swipe down to dismiss temporarily"></div>
+      <div class="action-card-header">
+        <div class="action-card-title-group">
+          <span class="action-card-icon">${type === 'command' ? '⚡' : type === 'plan' ? '📋' : '❓'}</span>
+          <span class="action-card-title">${escapeHtml(title || 'Decision Required')}</span>
+        </div>
+        ${riskBadgeHtml}
+      </div>
+      ${bodyHtml}
+      ${footerHtml}
+    </div>
+  `;
+
+  const card = document.getElementById('floatingActionCard');
+  if (!card) return;
+
+  // Swipe-down dismiss on handle
+  let cardTouchStartY = 0;
+  card.querySelector('.action-card-handle')?.addEventListener('touchstart', (e) => {
+    cardTouchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  card.querySelector('.action-card-handle')?.addEventListener('touchend', (e) => {
+    const deltaY = e.changedTouches[0].clientY - cardTouchStartY;
+    if (deltaY > 35) {
+      card.style.opacity = '0.35';
+      card.style.transform = 'translateY(18px)';
+      setTimeout(() => {
+        card.style.opacity = '';
+        card.style.transform = '';
+      }, 1800);
+    }
+  }, { passive: true });
+
+  // Copy command button
+  card.querySelector('#actionCmdCopyBtn')?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(command || '');
+      const btn = card.querySelector('#actionCmdCopyBtn');
+      if (btn) {
+        btn.textContent = '✓';
+        setTimeout(() => { btn.textContent = '📋'; }, 1500);
+      }
+    } catch (_) {}
+  });
+
+  // Question Options
+  if (type === 'question') {
+    const optionPills = card.querySelectorAll('.action-option-pill');
+    optionPills.forEach((pill) => {
+      pill.addEventListener('click', () => {
+        if (isMultiSelect) {
+          pill.classList.toggle('selected');
+        } else {
+          optionPills.forEach(p => p.classList.remove('selected'));
+          pill.classList.add('selected');
+        }
+      });
+    });
+
+    card.querySelector('#actionBtnSubmit')?.addEventListener('click', async () => {
+      const selectedPills = Array.from(card.querySelectorAll('.action-option-pill.selected'));
+      const selectedIndices = selectedPills.map(p => Number(p.getAttribute('data-idx')));
+      const writeIn = card.querySelector('#actionWriteInInput')?.value?.trim() || '';
+      await respondToInteractiveAction({
+        actionId: id,
+        type: 'question',
+        decision: 'submit',
+        selectedOptions: selectedIndices,
+        writeInText: writeIn
+      });
+    });
+
+    card.querySelector('#actionBtnSkip')?.addEventListener('click', async () => {
+      await respondToInteractiveAction({
+        actionId: id,
+        type: 'question',
+        decision: 'skip'
+      });
+    });
+  }
+
+  // Command Accept / Reject
+  if (type === 'command') {
+    const acceptBtn = card.querySelector('#actionBtnAccept');
+    const rejectBtn = card.querySelector('#actionBtnReject');
+
+    rejectBtn?.addEventListener('click', async () => {
+      await respondToInteractiveAction({
+        actionId: id,
+        type: 'command',
+        decision: 'reject'
+      });
+    });
+
+    acceptBtn?.addEventListener('click', async () => {
+      const isCritical = acceptBtn.getAttribute('data-critical') === 'true';
+      if (isCritical && !acceptBtn.classList.contains('confirming')) {
+        // Step 1 of 2-step confirmation
+        acceptBtn.classList.add('confirming');
+        const origText = acceptBtn.textContent;
+        acceptBtn.textContent = '⚠️ Confirm risk?';
+        clearTimeout(actionConfirmTimeout);
+        actionConfirmTimeout = setTimeout(() => {
+          acceptBtn.classList.remove('confirming');
+          acceptBtn.textContent = origText;
+        }, 3500);
+        return;
+      }
+
+      // Step 2 (or safe/warning 1-step): execute!
+      clearTimeout(actionConfirmTimeout);
+      acceptBtn.disabled = true;
+      acceptBtn.textContent = 'Running...';
+      try {
+        await respondToInteractiveAction({
+          actionId: id,
+          type: 'command',
+          decision: 'accept'
+        });
+      } finally {
+        if (acceptBtn && activeActionData) {
+          acceptBtn.disabled = false;
+          acceptBtn.textContent = acceptText || 'Run command';
+        }
+      }
+    });
+  }
+
+  // Plan Proceed & Review & Preview
+  if (type === 'plan') {
+    const previewBtn = card.querySelector('#actionBtnPreviewPlan');
+    const reviewBtn = card.querySelector('#actionBtnReview');
+    const proceedBtn = card.querySelector('#actionBtnProceed');
+    const dismissBtn = card.querySelector('#actionBtnDismiss');
+    const reviewBox = card.querySelector('#actionPlanReviewBox');
+    const reviewInput = card.querySelector('#actionPlanFeedbackInput');
+    const reviewCancelBtn = card.querySelector('#actionPlanReviewCancelBtn');
+    const reviewSubmitBtn = card.querySelector('#actionPlanReviewSubmitBtn');
+
+    // 1. Preview Implementation Plan
+    previewBtn?.addEventListener('click', () => {
+      openPlanPreviewModal();
+    });
+
+    // 2. Review: toggle inline feedback box
+    reviewBtn?.addEventListener('click', () => {
+      if (reviewBox) {
+        const isVisible = reviewBox.style.display !== 'none';
+        reviewBox.style.display = isVisible ? 'none' : 'flex';
+        if (!isVisible && reviewInput) {
+          setTimeout(() => reviewInput.focus(), 60);
+        }
+      }
+    });
+
+    reviewCancelBtn?.addEventListener('click', () => {
+      if (reviewBox) reviewBox.style.display = 'none';
+    });
+
+    reviewSubmitBtn?.addEventListener('click', async () => {
+      const feedback = reviewInput?.value?.trim() || '';
+      reviewSubmitBtn.disabled = true;
+      reviewSubmitBtn.textContent = 'Submitting...';
+      try {
+        await respondToInteractiveAction({
+          actionId: id,
+          type: 'plan',
+          decision: 'review',
+          feedback
+        });
+      } finally {
+        reviewSubmitBtn.disabled = false;
+        reviewSubmitBtn.textContent = 'Submit Review';
+      }
+    });
+
+    // 3. Proceed with Plan
+    proceedBtn?.addEventListener('click', async () => {
+      proceedBtn.disabled = true;
+      proceedBtn.textContent = 'Starting...';
+      try {
+        await respondToInteractiveAction({
+          actionId: id,
+          type: 'plan',
+          decision: 'proceed'
+        });
+      } finally {
+        if (proceedBtn && activeActionData) {
+          proceedBtn.disabled = false;
+          proceedBtn.textContent = proceedText || 'Proceed with Plan';
+        }
+      }
+    });
+
+    // 4. Later (snooze)
+    dismissBtn?.addEventListener('click', () => {
+      snoozedActionId = id;
+      actedActionIds.add(id);
+
+      // Notify server to dismiss pending prompt
+      fetchWithAuth('/api/action/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actionId: id, type: 'plan', decision: 'later' })
+      }).catch(() => {});
+
+      slot.innerHTML = `
+        <div class="plan-snooze-chip" id="planSnoozeResumeBtn" title="Tap to resume plan approval">
+          <span>📋 ${escapeHtml(title || 'Plan Approval')}</span>
+          <span style="font-weight: normal; opacity: 0.85;">· Tap to review</span>
+        </div>
+      `;
+      document.getElementById('planSnoozeResumeBtn')?.addEventListener('click', () => {
+        snoozedActionId = null;
+        actedActionIds.delete(id);
+        actedActionIds.delete('plan-approval');
+        renderActionCard(actionData);
+      });
+    });
+  }
+}
+
+async function respondToInteractiveAction(payload) {
+  try {
+    if (payload?.actionId) {
+      actedActionIds.add(payload.actionId);
+    }
+    if (activeActionData?.id) {
+      actedActionIds.add(activeActionData.id);
+    }
+
+    const res = await fetchWithAuth('/api/action/respond', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify(payload)
     });
-    const payload = await response.json();
-    if (payload.success) {
-      showSlideInNotification(`Action ${action} executed.`, 'success');
+    const result = await res.json();
+    if (result.success) {
+      snoozedActionId = null;
+      const successMsg = payload.decision === 'review'
+        ? (payload.feedback ? 'Plan review submitted' : 'Plan review opened')
+        : payload.decision === 'proceed'
+          ? 'Plan execution started'
+          : 'Action executed successfully';
+      showSlideInNotification(successMsg, 'success');
+      renderActionCard(null);
     } else {
-      showSlideInNotification(payload.error || `Failed to ${action}.`, 'error');
+      if (payload?.actionId) actedActionIds.delete(payload.actionId);
+      if (activeActionData?.id) actedActionIds.delete(activeActionData.id);
+      showSlideInNotification(result.error || 'Execution failed', 'error');
     }
-  } catch (error) {
-    showSlideInNotification(error.message, 'error');
-  } finally {
-    document.getElementById('action-prompt-layer')?.remove();
+  } catch (err) {
+    if (payload?.actionId) actedActionIds.delete(payload.actionId);
+    if (activeActionData?.id) actedActionIds.delete(activeActionData.id);
+    showSlideInNotification(err.message, 'error');
   }
+}
+
+function showActionRequiredPrompt(message) {
+  const msgStr = typeof message === 'string' ? message : 'Pending approval request...';
+  let hash = 5381;
+  for (let i = 0; i < msgStr.length; i++) {
+    hash = ((hash << 5) + hash) + msgStr.charCodeAt(i);
+  }
+  const stableId = 'legacy-' + Math.abs(hash).toString(36);
+  renderActionCard({
+    id: stableId,
+    type: 'command',
+    title: 'Action Required',
+    command: msgStr,
+    riskLevel: 'warning',
+    acceptText: 'Run',
+    rejectText: 'Reject'
+  });
 }
 
 async function loadSuggestions() {
@@ -677,6 +1640,34 @@ function buildSnapshotStyles(cssText) {
       height: auto !important;
       max-width: 100% !important;
       overflow: visible !important;
+      display: block !important;
+    }
+    #conversation > div, #chat > div, #cascade > div,
+    #conversation [class*="overflow"], #chat [class*="overflow"], #cascade [class*="overflow"],
+    [aria-label="Message history"],
+    [tabindex="0"] {
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      overflow: visible !important;
+      flex: none !important;
+      display: block !important;
+    }
+    [style*="container-type"] {
+      container-type: normal !important;
+      height: auto !important;
+      min-height: auto !important;
+    }
+    [role="article"][aria-label="User message"] {
+      position: relative !important;
+      background: var(--snapshot-card, #141b2d) !important;
+      border: 1px solid var(--snapshot-border, #232d46) !important;
+      border-radius: 12px !important;
+      padding: 12px 14px !important;
+      margin: 12px 0 !important;
+    }
+    [role="article"][aria-label="User message"]::after {
+      display: none !important;
     }
     #conversation *, #chat *, #cascade * {
       color: inherit !important;
@@ -807,6 +1798,15 @@ async function loadSnapshot() {
       ? `${payload.stats.nodes} nodes · ${Math.round((payload.stats.htmlSize + payload.stats.cssSize) / 1024)} KB`
       : 'Live';
 
+    if (payload.agentActivity !== undefined) {
+      updateAgentActivity(payload.agentActivity);
+    }
+    if (payload.pendingAction !== undefined) {
+      if (!payload.pendingAction || !actedActionIds.has(payload.pendingAction.id)) {
+        renderActionCard(payload.pendingAction);
+      }
+    }
+
     let styleTag = document.getElementById('cdp-styles');
     if (!styleTag) {
       styleTag = document.createElement('style');
@@ -823,6 +1823,14 @@ async function loadSnapshot() {
       details.setAttribute('open', '')
     );
     addMobileCopyButtons();
+
+    const isGenerating = Boolean(
+      payload.isGenerating ||
+      isActiveWorkState(currentAgentActivity) ||
+      chatContent.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]') ||
+      payload.isStreaming
+    );
+    stopBtn?.classList.toggle('active', isGenerating);
 
     if (!isUserLocked && isNearBottom) {
       scrollToBottom(false);
@@ -913,11 +1921,19 @@ async function syncScrollToDesktop() {
   } catch (_) {}
 }
 
+let isSendingMessage = false;
+
 async function sendMessage() {
+  if (isSendingMessage) return;
+
   const message = messageInput.value.trim();
-  if (!message) return;
-  messageInput.value = '';
-  messageInput.style.height = 'auto';
+  if (!message && !stagedAudio && !stagedImage) return;
+
+  isSendingMessage = true;
+  const savedPrompt = messageInput.value;
+  const savedAudio = stagedAudio;
+  const savedImage = stagedImage;
+
   sendBtn.disabled = true;
 
   try {
@@ -926,16 +1942,131 @@ async function sendMessage() {
       await new Promise((resolve) => setTimeout(resolve, 800));
     }
 
-    await fetchWithAuth('/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
-    });
-    setTimeout(loadSnapshot, 300);
-    setTimeout(loadSnapshot, 800);
+    if (stagedAudio && stagedImage) {
+      showSlideInNotification('Sending image and voice memo...', 'info');
+      const audioToUpload = stagedAudio;
+      const imageToUpload = stagedImage;
+      clearStagedAudio();
+      clearStagedImage();
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+
+      const mediaRes = await fetchWithAuth('/api/upload-media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: {
+            name: imageToUpload.name,
+            mimeType: imageToUpload.mimeType,
+            data: imageToUpload.data
+          },
+          audio: {
+            name: audioToUpload.name,
+            mimeType: audioToUpload.mimeType,
+            data: audioToUpload.data,
+            durationSeconds: audioToUpload.durationSeconds
+          },
+          prompt: message,
+          inject: true,
+          submit: true
+        })
+      });
+      const mediaPayload = await mediaRes.json();
+      if (!mediaPayload.success) {
+        throw new Error(mediaPayload.error || 'Failed to send image and voice memo');
+      }
+      showSlideInNotification('Image and voice memo sent!', 'success');
+      setTimeout(loadSnapshot, 500);
+      setTimeout(loadSnapshot, 1500);
+    } else if (stagedAudio) {
+      const audioPayload = {
+        name: stagedAudio.name,
+        mimeType: stagedAudio.mimeType,
+        data: stagedAudio.data,
+        durationSeconds: stagedAudio.durationSeconds,
+        prompt: message,
+        inject: true,
+        submit: true
+      };
+      clearStagedAudio();
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+      showSlideInNotification('Sending voice memo to session...', 'info');
+
+      const response = await fetchWithAuth('/api/upload-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(audioPayload)
+      });
+      const payload = await response.json();
+      if (!payload.success) {
+        throw new Error(payload.error || 'Failed to send voice memo');
+      }
+      showSlideInNotification('Voice memo sent!', 'success');
+      setTimeout(loadSnapshot, 500);
+      setTimeout(loadSnapshot, 1500);
+    } else if (stagedImage) {
+      const imgPayload = {
+        name: stagedImage.name,
+        mimeType: stagedImage.mimeType,
+        data: stagedImage.data,
+        prompt: message,
+        inject: true,
+        submit: true
+      };
+      clearStagedImage();
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+      showSlideInNotification('Sending image to session...', 'info');
+
+      const response = await fetchWithAuth('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(imgPayload)
+      });
+      const payload = await response.json();
+      if (!payload.success) {
+        throw new Error(payload.error || 'Failed to send image');
+      }
+      showSlideInNotification('Image sent!', 'success');
+      setTimeout(loadSnapshot, 500);
+      setTimeout(loadSnapshot, 1500);
+    } else {
+      messageInput.value = '';
+      messageInput.style.height = 'auto';
+      const response = await fetchWithAuth('/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (payload.success === false) {
+        throw new Error(payload.error || payload.details?.error || 'Failed to send message');
+      }
+      if (payload.queued || payload.details?.queued) {
+        showSlideInNotification('Message queued for agent', 'info');
+      }
+      setTimeout(loadSnapshot, 300);
+      setTimeout(loadSnapshot, 800);
+    }
   } catch (error) {
+    if (savedImage && !stagedImage) {
+      stagedImage = savedImage;
+      if (imageUploadBtn) imageUploadBtn.classList.add('active');
+      renderStagedMedia();
+    }
+    if (savedAudio && !stagedAudio) {
+      stagedAudio = savedAudio;
+      renderStagedMedia();
+    }
+    if (savedPrompt && !messageInput.value) {
+      messageInput.value = savedPrompt;
+      messageInput.style.height = 'auto';
+      messageInput.style.height = `${messageInput.scrollHeight}px`;
+    }
     showSlideInNotification(error.message, 'error');
   } finally {
+    isSendingMessage = false;
     sendBtn.disabled = false;
   }
 }
@@ -1230,38 +2361,221 @@ function handleScreenFrame(data) {
   screenFrame.src = `data:${data.format || 'image/jpeg'};base64,${data.data}`;
 }
 
-async function uploadImage(file) {
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try {
-      const base64 = String(reader.result).split(',')[1];
-      const prompt = messageInput.value.trim();
-      const response = await fetchWithAuth('/api/upload-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: file.name,
-          mimeType: file.type,
-          data: base64,
-          prompt,
-          inject: true,
-        }),
-      });
-      const payload = await response.json();
-      if (!payload.success) {
-        throw new Error(payload.error || 'Upload failed');
+// --- Voice Memo & Media Staging State ---
+let voiceMemoEnabled = localStorage.getItem('omni_voice_memo_enabled') !== 'false';
+let isRecordingAudio = false;
+let mediaRecorder = null;
+let audioStream = null;
+let audioChunks = [];
+let recordStartTime = 0;
+let recordTimerInterval = null;
+let stagedAudio = null;
+let stagedImage = null;
+
+function updateVoiceMemoSettingUI() {
+  if (voiceMemoSettingText) {
+    voiceMemoSettingText.textContent = voiceMemoEnabled ? 'Enabled (On)' : 'Disabled (Off)';
+  }
+  if (voiceMemoSettingBtn) {
+    voiceMemoSettingBtn.classList.toggle('active', voiceMemoEnabled);
+  }
+  if (voiceMemoBtn) {
+    voiceMemoBtn.style.display = voiceMemoEnabled ? 'inline-flex' : 'none';
+  }
+  if (!voiceMemoEnabled && isRecordingAudio) {
+    cancelAudioRecording();
+  }
+}
+
+function setVoiceMemoEnabled(enabled) {
+  voiceMemoEnabled = !!enabled;
+  localStorage.setItem('omni_voice_memo_enabled', voiceMemoEnabled ? 'true' : 'false');
+  updateVoiceMemoSettingUI();
+  showSlideInNotification(`Voice memo ${voiceMemoEnabled ? 'enabled' : 'disabled'}`, 'info');
+}
+
+function formatTimer(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+async function startAudioRecording() {
+  if (!voiceMemoEnabled) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showSlideInNotification('Microphone access is not supported in this browser.', 'error');
+    return;
+  }
+
+  try {
+    audioStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true
       }
-      messageInput.value = '';
-      messageInput.style.height = 'auto';
-      showSlideInNotification('Image uploaded and injected into the active session.', 'success');
-      setTimeout(loadSnapshot, 500);
-    } catch (error) {
-      showSlideInNotification(error.message, 'error');
-    } finally {
-      imageInput.value = '';
+    });
+
+    let mimeType = 'audio/webm;codecs=opus';
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported(mimeType)) {
+      mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' :
+        MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' :
+          MediaRecorder.isTypeSupported('audio/ogg') ? 'audio/ogg' : '';
     }
-  };
-  reader.readAsDataURL(file);
+
+    mediaRecorder = mimeType ? new MediaRecorder(audioStream, { mimeType, audioBitsPerSecond: 64000 }) : new MediaRecorder(audioStream);
+    audioChunks = [];
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        audioChunks.push(e.data);
+      }
+    };
+
+    mediaRecorder.onstop = () => {
+      cleanupAudioStream();
+      if (!isRecordingAudio) return;
+      isRecordingAudio = false;
+
+      const blobType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+      const audioBlob = new Blob(audioChunks, { type: blobType });
+      const durationSeconds = Math.max(1, Math.round((Date.now() - recordStartTime) / 1000));
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = String(reader.result);
+        const base64 = dataUrl.split(',')[1];
+        stageAudio({
+          name: `voice-memo-${Date.now()}`,
+          mimeType: blobType,
+          data: base64,
+          durationSeconds,
+          dataUrl,
+          blob: audioBlob
+        });
+      };
+      reader.readAsDataURL(audioBlob);
+    };
+
+    mediaRecorder.start(250);
+    isRecordingAudio = true;
+    recordStartTime = Date.now();
+
+    if (voiceMemoBtn) voiceMemoBtn.style.display = 'none';
+    if (voiceRecordingBar) voiceRecordingBar.style.display = 'flex';
+    if (recordingTimer) recordingTimer.textContent = '00:00';
+
+    if (recordTimerInterval) clearInterval(recordTimerInterval);
+    recordTimerInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - recordStartTime) / 1000);
+      if (recordingTimer) recordingTimer.textContent = formatTimer(elapsed);
+      if (elapsed >= 300) {
+        stopAudioRecording();
+      }
+    }, 250);
+
+  } catch (err) {
+    cleanupAudioStream();
+    isRecordingAudio = false;
+    if (voiceMemoBtn) voiceMemoBtn.style.display = voiceMemoEnabled ? 'inline-flex' : 'none';
+    if (voiceRecordingBar) voiceRecordingBar.style.display = 'none';
+    showSlideInNotification(`Microphone error: ${err.message || 'Access denied'}`, 'error');
+  }
+}
+
+function stopAudioRecording() {
+  if (recordTimerInterval) {
+    clearInterval(recordTimerInterval);
+    recordTimerInterval = null;
+  }
+  if (voiceRecordingBar) voiceRecordingBar.style.display = 'none';
+  if (voiceMemoBtn) voiceMemoBtn.style.display = voiceMemoEnabled ? 'inline-flex' : 'none';
+
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+}
+
+function cancelAudioRecording() {
+  if (recordTimerInterval) {
+    clearInterval(recordTimerInterval);
+    recordTimerInterval = null;
+  }
+  isRecordingAudio = false;
+  if (voiceRecordingBar) voiceRecordingBar.style.display = 'none';
+  if (voiceMemoBtn) voiceMemoBtn.style.display = voiceMemoEnabled ? 'inline-flex' : 'none';
+
+  cleanupAudioStream();
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  audioChunks = [];
+}
+
+function cleanupAudioStream() {
+  if (audioStream) {
+    try {
+      audioStream.getTracks().forEach((track) => track.stop());
+    } catch (_) {}
+    audioStream = null;
+  }
+}
+
+function stageAudio(item) {
+  stagedAudio = item;
+  renderStagedMedia();
+  showSlideInNotification('Voice memo attached. Add text or send.', 'info');
+}
+
+function clearStagedAudio() {
+  stagedAudio = null;
+  renderStagedMedia();
+}
+
+function clearStagedImage() {
+  stagedImage = null;
+  if (imageInput) imageInput.value = '';
+  if (imageUploadBtn) {
+    imageUploadBtn.classList.remove('active');
+  }
+  renderStagedMedia();
+}
+
+function renderStagedMedia() {
+  if (!stagedMediaSlot) return;
+  stagedMediaSlot.innerHTML = '';
+
+  if (stagedAudio) {
+    const card = document.createElement('div');
+    card.className = 'staged-media-card';
+    const sizeKb = Math.round(((stagedAudio.data?.length || 0) * 0.75) / 1024);
+    card.innerHTML = `
+      <div class="staged-audio-preview">
+        <div class="staged-audio-info">
+          <span class="staged-audio-title">🎙️ Voice Memo (${formatTimer(stagedAudio.durationSeconds)})</span>
+          <span>~${sizeKb} KB</span>
+        </div>
+        <audio class="staged-audio-player" src="${stagedAudio.dataUrl}" controls preload="metadata"></audio>
+      </div>
+      <button class="staged-media-discard" id="discardAudioBtn" type="button" aria-label="Discard voice memo" title="Discard">✕</button>
+    `;
+    card.querySelector('#discardAudioBtn')?.addEventListener('click', clearStagedAudio);
+    stagedMediaSlot.appendChild(card);
+  }
+
+  if (stagedImage) {
+    const card = document.createElement('div');
+    card.className = 'staged-media-card';
+    card.innerHTML = `
+      <img src="${stagedImage.dataUrl}" style="width: 38px; height: 38px; object-fit: cover; border-radius: var(--radius-xs);" />
+      <div style="flex: 1; min-width: 0;">
+        <div class="staged-audio-title">${stagedImage.name}</div>
+        <div style="font-size: var(--font-size-xs); color: var(--text-muted);">Attached image (ready to send)</div>
+      </div>
+      <button class="staged-media-discard" id="discardImgBtn" type="button" aria-label="Discard image" title="Discard">✕</button>
+    `;
+    card.querySelector('#discardImgBtn')?.addEventListener('click', clearStagedImage);
+    stagedMediaSlot.appendChild(card);
+  }
 }
 
 function connectWebSocket() {
@@ -1289,16 +2603,46 @@ function connectWebSocket() {
         }
         break;
       case 'snapshot_update':
+        if (data.agentActivity !== undefined) {
+          updateAgentActivity(data.agentActivity);
+        }
+        if (data.isGenerating !== undefined) {
+          const isAct = Boolean(data.isGenerating || isActiveWorkState(data.agentActivity));
+          stopBtn?.classList.toggle('active', isAct);
+        }
         if (!state.userIsScrolling) {
           loadSnapshot();
         }
         break;
+      case 'action_required':
+        if (data.action && actedActionIds.has(data.action.id)) {
+          break;
+        }
+        renderActionCard(data.action);
+        break;
+      case 'action_resolved':
+        snoozedActionId = null;
+        closePlanPreviewModal();
+        renderActionCard(null);
+        break;
       case 'cdp_status':
         handleCDPStatus(data.status);
         break;
+      case 'status_test':
+        if (isDevMode) {
+          testStatus(data.mode, data.text, data.durationMs);
+        }
+        break;
       case 'notification':
         if (data.event === 'action_required') {
-          showActionRequiredPrompt(data.message);
+          if (data.action) {
+            if (actedActionIds.has(data.action.id)) {
+              break;
+            }
+            renderActionCard(data.action);
+          } else {
+            showActionRequiredPrompt(data.message);
+          }
         } else {
           showSlideInNotification(
             data.message,
@@ -1372,7 +2716,17 @@ refreshBtn.addEventListener('click', () => {
   fetchAppState();
 });
 stopBtn.addEventListener('click', async () => {
-  await fetchWithAuth('/stop', { method: 'POST' });
+  try {
+    const res = await fetchWithAuth('/stop', { method: 'POST' });
+    const data = await res.json();
+    if (data?.success) {
+      showSlideInNotification('Generation stopped', 'info');
+    } else {
+      showSlideInNotification(data?.error || 'No active generation to stop', 'warning');
+    }
+  } catch (err) {
+    showSlideInNotification('Failed to stop generation', 'error');
+  }
 });
 newChatBtn.addEventListener('click', startNewChat);
 historyBtn.addEventListener('click', showChatHistory);
@@ -1382,7 +2736,101 @@ scrollToBottomBtn.addEventListener('click', () => {
   state.userIsScrolling = false;
   scrollToBottom();
 });
-modeBtn.addEventListener('click', () =>
+if (overflowMenuBtn && headerOverflowDropdown) {
+  overflowMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isHidden = headerOverflowDropdown.hasAttribute('hidden');
+    if (isHidden) {
+      headerOverflowDropdown.removeAttribute('hidden');
+    } else {
+      headerOverflowDropdown.setAttribute('hidden', '');
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!headerOverflowDropdown.contains(e.target) && e.target !== overflowMenuBtn) {
+      headerOverflowDropdown.setAttribute('hidden', '');
+    }
+  });
+
+  headerOverflowDropdown.addEventListener('click', (e) => {
+    if (e.target.closest('.overflow-item')) {
+      headerOverflowDropdown.setAttribute('hidden', '');
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !headerOverflowDropdown.hasAttribute('hidden')) {
+      headerOverflowDropdown.setAttribute('hidden', '');
+    }
+  });
+}
+
+const statusBadgeEl = document.getElementById('statusBadge');
+if (statusBadgeEl) {
+  statusBadgeEl.addEventListener('click', () => {
+    if (isCDPConnected) {
+      const act = currentAgentActivity && currentAgentActivity.toLowerCase() !== 'idle' ? ` · ${currentAgentActivity}` : ' · Ready';
+      showSlideInNotification(`Antigravity Connected${act}`, 'success');
+    } else {
+      showSlideInNotification('Antigravity Offline · Reconnecting...', 'warning');
+    }
+  });
+}
+
+const devModeOverflowBtn = document.getElementById('devModeOverflowBtn');
+if (devModeOverflowBtn) {
+  if (isDevMode) {
+    devModeOverflowBtn.hidden = false;
+    devModeOverflowBtn.addEventListener('click', () => {
+      openModal(
+        'Developer Diagnostics',
+        [
+          { label: 'Status: Cycle All Modes', value: 'cycle' },
+          { label: 'Status: Live & Idle', value: 'idle' },
+          { label: 'Status: Working...', value: 'working' },
+          { label: 'Status: Thinking...', value: 'thinking' },
+          { label: 'Status: Reconnecting', value: 'reconnecting' },
+          { label: 'Status: Reset to Live State', value: 'reset' },
+          { label: 'Mock: Plan Approval Card', value: 'mock_plan' },
+          { label: 'Mock: Command Action Card', value: 'mock_cmd' },
+          { label: 'Mock: Question Action Card', value: 'mock_question' },
+          { label: '⚠️ Disable Developer Mode', value: 'disable' },
+        ],
+        async (selected) => {
+          if (selected === 'disable') {
+            localStorage.removeItem('omni_dev_mode');
+            window.location.reload();
+          } else if (selected === 'mock_plan') {
+            await fetchWithAuth('/api/action/mock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'plan' }),
+            });
+          } else if (selected === 'mock_cmd') {
+            await fetchWithAuth('/api/action/mock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'command' }),
+            });
+          } else if (selected === 'mock_question') {
+            await fetchWithAuth('/api/action/mock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'question' }),
+            });
+          } else {
+            testStatus(selected);
+          }
+        }
+      );
+    });
+  } else {
+    devModeOverflowBtn.hidden = true;
+  }
+}
+
+modeBtn?.addEventListener('click', () =>
   openModal(
     'Select Mode',
     ['Fast', 'Planning'].map((value) => ({ label: value, value })),
@@ -1395,16 +2843,37 @@ modeBtn.addEventListener('click', () =>
       const payload = await response.json();
       if (payload.success) {
         state.currentMode = value;
-        modeText.textContent = value;
+        if (modeText) modeText.textContent = value;
         modeBtn.classList.toggle('active', value === 'Planning');
       }
     }
   )
 );
-modelBtn.addEventListener('click', () =>
+modelBtn.addEventListener('click', async () => {
+  let modelList = DEFAULT_MODELS;
+
+  // Prefer dynamically configured models from language server quota if already loaded
+  if (Array.isArray(state.quota?.models) && state.quota.models.length > 0) {
+    const fromQuota = Array.from(
+      new Set(
+        state.quota.models.map((m) => m.label || m.name).filter(Boolean)
+      )
+    );
+    if (fromQuota.length > 0) modelList = fromQuota;
+  } else {
+    // Otherwise fetch the latest configured models from /api/models
+    try {
+      const res = await fetchWithAuth('/api/models');
+      const data = await res.json();
+      if (Array.isArray(data?.models) && data.models.length > 0) {
+        modelList = data.models;
+      }
+    } catch (_) {}
+  }
+
   openModal(
     'Select Model',
-    MODELS.map((value) => ({ label: value, value })),
+    modelList.map((value) => ({ label: value, value })),
     async (value) => {
       const response = await fetchWithAuth('/set-model', {
         method: 'POST',
@@ -1416,8 +2885,8 @@ modelBtn.addEventListener('click', () =>
         modelText.textContent = value;
       }
     }
-  )
-);
+  );
+});
 targetBtn.addEventListener('click', showTargetSelector);
 themeBtn.addEventListener('click', () =>
   openModal(
@@ -1446,10 +2915,71 @@ screenStopBtn.addEventListener('click', stopScreenStream);
 imageUploadBtn.addEventListener('click', () => imageInput.click());
 imageInput.addEventListener('change', () => {
   const [file] = imageInput.files || [];
-  if (file) uploadImage(file);
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      const base64 = dataUrl.split(',')[1];
+      stagedImage = {
+        name: file.name,
+        mimeType: file.type,
+        data: base64,
+        dataUrl
+      };
+      if (imageUploadBtn) {
+        imageUploadBtn.classList.add('active');
+      }
+      renderStagedMedia();
+      showSlideInNotification('Image attached. Type context or click Send.', 'info');
+    };
+    reader.readAsDataURL(file);
+  }
 });
+voiceMemoSettingBtn?.addEventListener('click', () => {
+  setVoiceMemoEnabled(!voiceMemoEnabled);
+});
+voiceMemoBtn?.addEventListener('click', () => {
+  startAudioRecording();
+});
+cancelRecordBtn?.addEventListener('click', () => {
+  cancelAudioRecording();
+});
+doneRecordBtn?.addEventListener('click', () => {
+  stopAudioRecording();
+});
+updateVoiceMemoSettingUI();
+
+let compactModeEnabled = localStorage.getItem('omni_compact_mode') === 'true';
+
+function updateCompactModeUI() {
+  document.documentElement.classList.toggle('compact-mode', compactModeEnabled);
+  document.body.classList.toggle('compact-mode', compactModeEnabled);
+  if (compactModeText) {
+    compactModeText.textContent = compactModeEnabled ? 'High Density (On)' : 'Standard (Off)';
+  }
+  if (compactModeBtn) {
+    compactModeBtn.classList.toggle('active', compactModeEnabled);
+  }
+}
+
+function setCompactModeEnabled(enabled) {
+  compactModeEnabled = !!enabled;
+  localStorage.setItem('omni_compact_mode', compactModeEnabled ? 'true' : 'false');
+  updateCompactModeUI();
+  showSlideInNotification(`Compact mode ${compactModeEnabled ? 'enabled' : 'disabled'}`, 'info');
+}
+
+compactModeBtn?.addEventListener('click', () => {
+  setCompactModeEnabled(!compactModeEnabled);
+});
+updateCompactModeUI();
 enableHttpsBtn.addEventListener('click', enableHttps);
 dismissSslBtn.addEventListener('click', dismissSslBanner);
+messageInput.addEventListener('focus', () => {
+  ensurePromptVisible(true);
+  setTimeout(() => ensurePromptVisible(false), 120);
+  setTimeout(() => ensurePromptVisible(false), 360);
+});
 messageInput.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault();
@@ -1459,6 +2989,7 @@ messageInput.addEventListener('keydown', (event) => {
 messageInput.addEventListener('input', () => {
   messageInput.style.height = 'auto';
   messageInput.style.height = `${messageInput.scrollHeight}px`;
+  ensurePromptVisible(false);
 });
 chatContainer.addEventListener('scroll', () => {
   state.userIsScrolling = true;
@@ -1517,13 +3048,62 @@ document.querySelectorAll('.workspace-tab').forEach((button) => {
   button.addEventListener('click', () => setWorkspacePanel(button.dataset.panel));
 });
 
+function ensurePromptVisible(smooth = false) {
+  const inputSec = document.querySelector('.input-section');
+  if (inputSec) {
+    try {
+      inputSec.scrollIntoView({ block: 'end', inline: 'nearest', behavior: smooth ? 'smooth' : 'auto' });
+    } catch (_) {
+      inputSec.scrollIntoView(false);
+    }
+  }
+  if (messageInput) {
+    messageInput.scrollTop = messageInput.scrollHeight;
+  }
+}
+
+function adjustViewport() {
+  if (!window.visualViewport) return;
+  const vh = window.visualViewport.height;
+  document.documentElement.style.setProperty('--visual-viewport-height', `${vh}px`);
+  document.body.style.height = `${vh}px`;
+  if (document.activeElement === messageInput) {
+    ensurePromptVisible(false);
+  }
+}
+
 if (window.visualViewport) {
-  const adjustViewport = () => {
-    document.body.style.height = `${window.visualViewport.height}px`;
-  };
   window.visualViewport.addEventListener('resize', adjustViewport);
   window.visualViewport.addEventListener('scroll', adjustViewport);
   adjustViewport();
+}
+
+function setupTouchGestures() {
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartTime = 0;
+
+  chatContainer.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    }
+  }, { passive: true });
+
+  chatContainer.addEventListener('touchend', (e) => {
+    if (e.changedTouches.length === 1 && Date.now() - touchStartTime < 450) {
+      const deltaX = e.changedTouches[0].clientX - touchStartX;
+      const deltaY = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(deltaX) > 75 && Math.abs(deltaY) < 55) {
+        if (deltaX < 0) {
+          toggleWorkspace(true);
+        } else if (deltaX > 0 && state.workspaceOpen) {
+          toggleWorkspace(false);
+        }
+      }
+    }
+  }, { passive: true });
 }
 
 applyTheme(state.currentTheme, false);
@@ -1532,6 +3112,8 @@ updateSessionStatsLabel();
 updateQuotaLabel();
 registerServiceWorker();
 checkSslStatus();
+setupTouchGestures();
+setupPlanPreviewModal();
 connectWebSocket();
 fetchAppState();
 loadQuickCommands();
@@ -1542,3 +3124,4 @@ loadTimeline();
 checkChatStatus();
 setInterval(fetchAppState, 5000);
 setInterval(checkChatStatus, 10000);
+

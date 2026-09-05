@@ -113,7 +113,12 @@ export async function connectCDP(url) {
             }
 
             if (data.method === 'Runtime.executionContextCreated') {
-                contexts.push(data.params.context);
+                const ctx = data.params.context;
+                if (ctx.auxData?.isDefault) {
+                    contexts.unshift(ctx);
+                } else {
+                    contexts.push(ctx);
+                }
             } else if (data.method === 'Runtime.executionContextDestroyed') {
                 const id = data.params.executionContextId;
                 const idx = contexts.findIndex(c => c.id === id);

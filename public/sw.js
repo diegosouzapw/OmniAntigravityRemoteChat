@@ -1,4 +1,4 @@
-const CACHE_NAME = 'omni-antigravity-shell-v4';
+const CACHE_NAME = 'omni-antigravity-shell-v9';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -52,19 +52,61 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
-  const isStaticAsset =
-    url.origin === self.location.origin &&
-    (
-      url.pathname.startsWith('/css/') ||
-      url.pathname.startsWith('/js/') ||
-      url.pathname.startsWith('/icons/') ||
-      url.pathname === '/' ||
-      url.pathname.endsWith('.html') ||
-      url.pathname === '/manifest.json'
+  if (url.origin !== self.location.origin) return;
+
+  // Never cache or intercept login page or auth scripts in service worker
+  if (
+    url.pathname === '/login' ||
+    url.pathname === '/login.html' ||
+    url.pathname === '/js/login.js'
+  ) {
+    return;
+  }
+
+  // Network-First for HTML documents so updates are immediately visible when online
+  const isHtml = url.pathname === '/' || url.pathname.endsWith('.html');
+  if (isHtml) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
     );
+    return;
+  }
+
+  const isCodeAsset =
+    url.pathname.startsWith('/css/') ||
+    url.pathname.startsWith('/js/');
+
+  if (isCodeAsset) {
+    // Network-First for styles and scripts so styling/logic updates apply immediately
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  const isStaticAsset =
+    url.pathname.startsWith('/icons/') ||
+    url.pathname === '/manifest.json';
 
   if (!isStaticAsset) return;
 
+  // Cache-First for static media/manifest with network fallback
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) {
@@ -72,8 +114,10 @@ self.addEventListener('fetch', (event) => {
       }
 
       return fetch(request).then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        }
         return response;
       });
     })

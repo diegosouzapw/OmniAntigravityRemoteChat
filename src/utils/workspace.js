@@ -37,7 +37,7 @@ const DEFAULT_QUICK_COMMANDS = [
     {
         id: 'check-files',
         label: 'Check Files',
-        icon: '▣',
+        icon: '📁',
         prompt: 'Please inspect the changed files and summarize the main risks before editing.'
     },
     {
@@ -384,6 +384,74 @@ export async function saveUploadedImage(input) {
     };
 }
 
+const ALLOWED_AUDIO_MIME_TYPES = new Set([
+    'audio/webm',
+    'audio/webm;codecs=opus',
+    'audio/ogg',
+    'audio/ogg;codecs=opus',
+    'audio/mp4',
+    'audio/m4a',
+    'audio/aac',
+    'audio/wav',
+    'audio/x-wav',
+    'audio/mpeg',
+    'audio/mp3',
+    'video/webm'
+]);
+
+const MAX_AUDIO_BYTES = 15 * 1024 * 1024; // 15 MB limit (matches Antigravity desktop voice memo)
+
+/**
+ * Persist a base64 audio recording (voice memo) to the data directory.
+ *
+ * @param {{name?: string, mimeType?: string, data: string, durationSeconds?: number}} input
+ * @returns {Promise<{fileName: string, absolutePath: string, publicPath: string, mimeType: string, durationSeconds: number, dataUrl: string, buffer: Buffer}>}
+ */
+export async function saveUploadedAudio(input) {
+    await ensureWorkspaceData();
+
+    const rawMime = String(input.mimeType || 'audio/webm').toLowerCase().trim();
+    const baseMime = rawMime.split(';')[0].trim();
+
+    const isAllowed = ALLOWED_AUDIO_MIME_TYPES.has(rawMime) || ALLOWED_AUDIO_MIME_TYPES.has(baseMime) || baseMime.startsWith('audio/');
+    if (!isAllowed) {
+        throw new Error(`Unsupported audio MIME type: ${input.mimeType}`);
+    }
+
+    const buffer = Buffer.from(input.data, 'base64');
+    if (buffer.length === 0) {
+        throw new Error('Audio payload is empty');
+    }
+    if (buffer.length > MAX_AUDIO_BYTES) {
+        throw new Error(`Audio file size (${(buffer.length / (1024 * 1024)).toFixed(2)} MB) exceeds 15 MB limit`);
+    }
+
+    const safeBaseName = String(input.name || 'voice-memo')
+        .replace(/[^a-zA-Z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'voice-memo';
+
+    const extension = baseMime.includes('ogg') ? '.ogg' :
+        baseMime.includes('mp4') || baseMime.includes('m4a') || baseMime.includes('aac') ? '.m4a' :
+            baseMime.includes('wav') ? '.wav' :
+                baseMime.includes('mpeg') || baseMime.includes('mp3') ? '.mp3' : '.webm';
+
+    const fileName = `${Date.now()}-${safeBaseName}${safeBaseName.endsWith(extension) ? '' : extension}`;
+    const absolutePath = join(UPLOADS_DIR, fileName);
+    await fsp.writeFile(absolutePath, buffer);
+
+    const durationSeconds = Number(input.durationSeconds) > 0 ? Number(input.durationSeconds) : 0;
+
+    return {
+        fileName,
+        absolutePath,
+        publicPath: `/uploads/${fileName}`,
+        mimeType: rawMime,
+        durationSeconds,
+        dataUrl: `data:${rawMime};base64,${input.data}`,
+        buffer
+    };
+}
+
 /**
  * Lightweight terminal manager that streams stdout/stderr to subscribers.
  */
@@ -501,3 +569,57 @@ export class TerminalManager extends EventEmitter {
 export const terminalManager = new TerminalManager();
 export const workspaceRoot = WORKSPACE_ROOT;
 export const uploadsDir = UPLOADS_DIR;
+
+/**
+ * Find the latest implementation plan markdown file.
+ * Searches Antigravity brain directories and the workspace root.
+ *
+ * @returns {Promise<{path: string, content: string, updatedAt: number} | null>}
+ */
+export async function findLatestImplementationPlan() {
+    const candidates = [];
+    const brainRoots = [
+        join(os.homedir(), '.gemini', 'antigravity-ide', 'brain'),
+        join(os.homedir(), '.gemini', 'antigravity', 'brain')
+    ];
+
+    for (const root of brainRoots) {
+        try {
+            const dirs = await fsp.readdir(root, { withFileTypes: true });
+            for (const d of dirs) {
+                if (d.isDirectory()) {
+                    const planFile = join(root, d.name, 'implementation_plan.md');
+                    try {
+                        const stat = await fsp.stat(planFile);
+                        candidates.push({ path: planFile, mtime: stat.mtimeMs });
+                    } catch (_) {}
+                }
+            }
+        } catch (_) {}
+    }
+
+    // Also check workspace root and docs
+    const workspacePlan = join(WORKSPACE_ROOT, 'implementation_plan.md');
+    try {
+        const stat = await fsp.stat(workspacePlan);
+        candidates.push({ path: workspacePlan, mtime: stat.mtimeMs });
+    } catch (_) {}
+
+    const docsPlan = join(WORKSPACE_ROOT, 'docs', 'implementation_plan.md');
+    try {
+        const stat = await fsp.stat(docsPlan);
+        candidates.push({ path: docsPlan, mtime: stat.mtimeMs });
+    } catch (_) {}
+
+    candidates.sort((a, b) => b.mtime - a.mtime);
+    if (candidates.length > 0) {
+        const top = candidates[0];
+        const content = await fsp.readFile(top.path, 'utf-8');
+        return {
+            path: top.path,
+            content,
+            updatedAt: top.mtime
+        };
+    }
+    return null;
+}

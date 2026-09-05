@@ -14,7 +14,7 @@
   {
     "id": "check-files",
     "label": "Check Files",
-    "icon": "▣",
+    "icon": "📁",
     "prompt": "Please inspect the changed files and summarize the main risks before editing."
   },
   {

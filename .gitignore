@@ -33,6 +33,8 @@ build/
 .DS_Store
 data/uploads/*
 !data/uploads/.gitkeep
+data/screenshots/*
+!data/screenshots/.gitkeep
 
 # SSL Certificates (generated locally)
 certs/

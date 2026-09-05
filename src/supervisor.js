@@ -100,6 +100,76 @@ export function extractPendingCommand(html) {
 }
 
 /**
+ * Detects pending prompt from HTML snapshot content.
+ * Supports terminal commands ('run command') and plan approvals ('proceed').
+ *
+ * @param {string} html
+ * @returns {any | null}
+ */
+export function detectPendingPromptFromHtml(html) {
+    if (!html) return null;
+
+    // Check for actual button elements or role="button" with action text
+    // Avoid matching conversational markdown text or transcript lists
+    const hasRunBtn = /<button[^>]*>[\s\S]*?(?:run command|run)<\/button>/i.test(html) ||
+                      /<(?:div|span)[^>]*?(?:role=["']button["']|class=["'][^"']*?btn[^"']*?["'])[^>]*>[\s\S]*?(?:run command|run)<\/(?:div|span)>/i.test(html);
+
+    const hasRejectBtn = /<button[^>]*>[\s\S]*?(?:reject|deny|cancel|abort)<\/button>/i.test(html) ||
+                         /<(?:div|span)[^>]*?(?:role=["']button["']|class=["'][^"']*?btn[^"']*?["'])[^>]*>[\s\S]*?(?:reject|deny|cancel|abort)<\/(?:div|span)>/i.test(html);
+
+    // 1. Check for command approval (run command + reject/deny/cancel)
+    if (hasRunBtn && hasRejectBtn) {
+        let cmdText = '';
+        const codeMatch = html.match(/<code[^>]*>([\s\S]*?)<\/code>/i) ||
+                          html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+        if (codeMatch && codeMatch[1]) {
+            cmdText = codeMatch[1].replace(/<[^>]+>/g, '').trim();
+        }
+        if (!cmdText) {
+            const cmdLineMatch = html.match(/CommandLine:\s*([^\n\r<]+)/i);
+            if (cmdLineMatch && cmdLineMatch[1]) {
+                cmdText = cmdLineMatch[1].trim();
+            }
+        }
+        if (!cmdText) {
+            cmdText = extractPendingCommand(html);
+        }
+
+        const heuristics = evaluateCommandHeuristics(cmdText);
+        const cmdHash = Math.abs(cmdText.split('').reduce((a, b) => ((a << 5) + a) + b.charCodeAt(0), 5381)).toString(36);
+        return {
+            id: 'cmd-' + cmdHash,
+            type: 'command',
+            title: 'Command Execution',
+            command: cmdText || 'run_command',
+            riskLevel: heuristics.riskLevel || 'warning',
+            riskReason: heuristics.reason,
+            acceptText: 'Run command',
+            rejectText: 'Reject'
+        };
+    }
+
+    // 2. Check for Implementation Plan Proceed button
+    const hasProceedBtn = /<button[^>]*>[\s\S]*?(?:proceed with plan|proceed)<\/button>/i.test(html) ||
+                          /<(?:div|span)[^>]*?(?:role=["']button["']|class=["'][^"']*?btn[^"']*?["'])[^>]*>[\s\S]*?(?:proceed with plan|proceed)<\/(?:div|span)>/i.test(html);
+
+    if (hasProceedBtn && /plan/i.test(html)) {
+        return {
+            id: 'plan-approval',
+            type: 'plan',
+            title: 'Plan Approval',
+            summary: 'Implementation plan is ready for execution.',
+            proceedText: 'Proceed with Plan',
+            reviewText: 'Review',
+            hasPreview: true
+        };
+    }
+
+    return null;
+}
+
+/**
+
  * Conservative heuristic gate. If it says "unsafe", we do not auto-approve
  * even if the LLM is optimistic.
  *
@@ -142,7 +212,7 @@ export function evaluateCommandHeuristics(commandText) {
     ];
 
     if (riskyPatterns.some((pattern) => pattern.test(sample))) {
-        return { safe: false, reason: 'heuristic-risky-command' };
+        return { safe: false, reason: 'heuristic-risky-command', riskLevel: 'critical' };
     }
 
     const safePatterns = [
@@ -178,10 +248,10 @@ export function evaluateCommandHeuristics(commandText) {
     ];
 
     if (safePatterns.some((pattern) => pattern.test(sample))) {
-        return { safe: true, reason: 'heuristic-safe-command' };
+        return { safe: true, reason: 'heuristic-safe-command', riskLevel: 'safe' };
     }
 
-    return { safe: false, reason: 'heuristic-unknown-command' };
+    return { safe: false, reason: 'heuristic-unknown-command', riskLevel: 'warning' };
 }
 
 /**

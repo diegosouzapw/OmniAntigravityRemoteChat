@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- 🎙️ **Native Voice Memos** — In-browser audio recording directly from the mobile composer with live waveform/timer visualization, supporting `audio/webm` (Opus), `audio/mp4`, and `audio/wav`. Uploads to `POST /api/upload-audio` and injects directly into the Antigravity prompt for Gemini multimodal audio processing.
+- 📋 **Interactive Plan & Action Decision Remote System** — Remote support for Antigravity's Planning Mode artifacts (`implementation_plan.md`, `walkthrough.md`). Provides interactive action cards for plans, command approvals, and design questions.
+- 🗂️ **Mobile Plan Preview Modal & Review Drawer** — Full mobile markdown preview of implementation plans with 1-tap "Proceed with Plan", a sliding review drawer for custom feedback, and a "Reply Later / Snooze" option.
+- 🖼️ **Image & Media Attachments** — Added `POST /api/upload-image` endpoint with mobile file picker and drag-and-drop support for sending screenshots and media directly into the desktop chat.
+- 🧪 **Developer Mode & Diagnostic Tools** — Isolated diagnostic card in `/admin` with status dot simulators (`Idle`, `Working...`, `Thinking...`, `Reconnecting`, `Cycle`, `Reset`) and action card mock triggers (`Mock Plan Approval`, `Mock Command`, `Mock Question`). Conditionally exposes a discrete "Developer Tools" menu in the mobile chat when active (`localStorage.omni_dev_mode` or `?dev=1`).
+- 🗜️ **Ultra-Compact Header Mode** — Added a toggleable compact header mode option for smaller mobile viewports.
+- 🧪 **Expanded Unit Test Suite** — Added 4 new Vitest unit test suites (`upload-audio.test.js`, `action-decision.test.js`, `mobile-viewport.test.js`, `upload-media.test.js`), bringing total coverage to 12 files and 92/92 passing tests.
+
+### Changed
+- 🛑 **Better Explicit STOP Button** — Enhanced the active STOP button with an explicit, sober crimson satin finish and gentle ambient breathing pulse (`@keyframes stop-pulse-sober`) when the agent is actively generating, providing immediate visual feedback without harsh glare.
+- 🔔 **LIVE Badge & Agent Status** — Improved the LIVE status badge to dynamically reflect real-time Antigravity connection and agent activity (Idle, Working, Thinking) with interactive toast details on tap.
+- 📱 **Mobile Viewport & Dynamic Island Optimization** — Hardened virtual keyboard behavior via `interactive-widget=resizes-content` and visual viewport listeners (`window.visualViewport`), with full safe-area inset adaptation for notches and Dynamic Islands.
+- ⚡ **PWA Cache Strategy** — Bumped Service Worker shell cache to `omni-antigravity-shell-v9` with Network-First strategy for core CSS/JS assets.
+
+### Fixed
+- 🐛 **PWA Missing Icons** — Fixed missing or unrendered PWA app icons by adding `<link rel="icon">`, `<link rel="apple-touch-icon">`, and caching both standard and maskable SVG icons in the service worker shell.
+- 🐛 **Activity End Detection & STOP Button Deactivation** — Fixed a regression where past-tense step summaries (`"Worked for 3 minutes"`, `"Completed"`) caused `isGenerating` to remain `true` indefinitely. Active generation is now strictly bound to live IDE markers (`cancelBtn`, Preact `isRunning`, active spinner), deactivating the STOP button immediately upon turn completion.
+- 🐛 **False-Alarm Termination Alerts** — Eliminated spurious "Agent Terminated or Blocked!" toasts caused by substring matching on chat history. Error detection now strictly targets live DOM error banners and notifications (`[data-testid="error-banner"]`, `.notification-toast-error`).
+- 🐛 **Duplicate Action Card Re-Prompting** — Implemented an acted-action suppression set (`actedActionIds`) preventing already answered plans or commands from blinking or re-appearing.
+
+### Security
+- 🔒 **Gated Dev Mock Endpoints** — Guarded `/api/action/mock` and `/api/status/mock` behind `getDevMocksEnabled()` (`ENABLE_DEV_MOCKS`), automatically disabling mock routes in production (returning HTTP 403 Forbidden).
+
 ## [1.3.1] - 2026-04-25
 
 ### Fixed
