@@ -2107,33 +2107,39 @@ async function selectChat(cdp, chatTitle, chatId) {
                 }
             }
 
+            let clicked = false;
+            let method = '';
+
             // Strategy 1: Find by exact ID
             if (targetId) {
                 const byId = document.getElementById(targetId) || 
-                             document.getElementById('fastpick-item-' + targetId);
+                             document.getElementById('fastpick-item-' + targetId) ||
+                             document.querySelector('[id*="' + targetId + '"]');
                 if (byId && typeof byId.click === 'function') {
                     byId.click();
-                    return { success: true, method: 'chatId_match', id: targetId };
+                    clicked = true;
+                    method = 'chatId_match';
                 }
             }
 
             // Strategy 2: Find option by title inside fastPick
-            if (fastPick) {
+            if (!clicked && fastPick) {
                 const options = Array.from(fastPick.querySelectorAll('[role="option"], [id^="fastpick-item-"]'));
                 const match = options.find(opt => {
                     const text = (opt.innerText || '').toLowerCase();
                     const target = (targetTitle || '').toLowerCase();
-                    return target && (text.includes(target) || text.includes(target.slice(0, 20)));
+                    return target && (text.includes(target) || target.includes(text) || text.includes(target.slice(0, 20)));
                 });
 
                 if (match) {
                     match.click();
-                    return { success: true, method: 'fastpick_title_match', title: targetTitle };
+                    clicked = true;
+                    method = 'fastpick_title_match';
                 }
             }
 
             // Strategy 3: Fast-pick search input fallback
-            if (fastPick && targetTitle) {
+            if (!clicked && fastPick && targetTitle) {
                 const searchInput = fastPick.querySelector('input');
                 if (searchInput) {
                     searchInput.focus();
@@ -2143,17 +2149,60 @@ async function selectChat(cdp, chatTitle, chatId) {
                     const firstOption = fastPick.querySelector('[role="option"], [id^="fastpick-item-"]');
                     if (firstOption) {
                         firstOption.click();
-                        return { success: true, method: 'fastpick_search_match', title: targetTitle };
+                        clicked = true;
+                        method = 'fastpick_search_match';
                     }
                 }
             }
 
-            return { error: 'Chat not found: ' + (targetTitle || targetId) };
+            if (!clicked) {
+                return { error: 'Chat not found: ' + (targetTitle || targetId) };
+            }
+
+            // Check if a confirmation quick-pick appeared (e.g. "Open in current window" for cross-workspace convos)
+            let confirmedQuickPick = false;
+            for (let i = 0; i < 20; i++) {
+                await new Promise(r => setTimeout(r, 100));
+                const qi = document.querySelector('.quick-input-widget');
+                if (qi && (qi.offsetParent !== null || window.getComputedStyle(qi).display !== 'none')) {
+                    const rows = Array.from(qi.querySelectorAll('.monaco-list-row, .quick-input-list-entry'));
+                    const openCurrent = rows.find(el => el.innerText && (el.innerText.includes('Open in current window') || el.innerText.includes('current workspace')));
+                    if (openCurrent) {
+                        openCurrent.click();
+                        confirmedQuickPick = true;
+                        break;
+                    } else if (rows.length > 0) {
+                        rows[0].click();
+                        confirmedQuickPick = true;
+                        break;
+                    }
+                    const input = qi.querySelector('input');
+                    if (input) {
+                        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+                        confirmedQuickPick = true;
+                        break;
+                    }
+                }
+            }
+
+            // Wait for conversation DOM to render
+            for (let j = 0; j < 15; j++) {
+                await new Promise(r => setTimeout(r, 100));
+                const conv = document.getElementById('conversation') || document.getElementById('chat') || document.getElementById('cascade');
+                if (conv && conv.innerText && conv.innerText.trim().length > 20) break;
+            }
+
+            return {
+                success: true,
+                method,
+                confirmedQuickPick
+            };
         } catch (e) {
             return { error: e.toString() };
         }
     })()`;
 
+    let lastError = null;
     for (const ctx of cdp.contexts) {
         try {
             const res = await cdp.call("Runtime.evaluate", {
@@ -2165,10 +2214,16 @@ async function selectChat(cdp, chatTitle, chatId) {
             if (res.result?.value) {
                 const val = res.result.value;
                 if (val.success) return val;
+                if (val.error) lastError = val.error;
             }
-        } catch (e) { }
+            if (res.exceptionDetails) {
+                lastError = res.exceptionDetails.exception?.description || res.exceptionDetails.text;
+            }
+        } catch (e) {
+            lastError = e.message;
+        }
     }
-    return { error: 'Context failed' };
+    return { error: lastError || 'Context failed' };
 }
 
 /**
@@ -5129,6 +5184,43 @@ async function main() {
             if (!target) return res.status(400).json({ error: 'Chat title or ID required' });
             if (!cdpConnection) return res.status(503).json({ error: 'CDP disconnected' });
             const result = await selectChat(cdpConnection, title, chatId || id);
+            if (!result.success) {
+                return res.status(404).json(result);
+            }
+
+            // Invalidate stale snapshot caches immediately
+            lastSnapshot = null;
+            lastSnapshotHash = null;
+
+            // Immediately capture the fresh snapshot from CDP
+            try {
+                const freshSnapshot = await captureSnapshot(cdpConnection);
+                if (freshSnapshot && !freshSnapshot.error) {
+                    lastSnapshot = freshSnapshot;
+                    lastSnapshotHash = hashString(freshSnapshot.html);
+                    state.setLastSnapshot(freshSnapshot);
+
+                    // Broadcast snapshot update to all connected WebSocket clients
+                    broadcast({
+                        type: 'snapshot_update',
+                        agentActivity: freshSnapshot.agentActivity || 'Idle',
+                        isGenerating: Boolean(freshSnapshot.isGenerating),
+                        timestamp: new Date().toISOString()
+                    });
+
+                    return res.json({
+                        ...result,
+                        snapshot: {
+                            ...freshSnapshot,
+                            agentActivity: freshSnapshot.agentActivity || 'Idle',
+                            pendingAction: currentPendingAction
+                        }
+                    });
+                }
+            } catch (err) {
+                console.warn('Post-selectChat snapshot capture error:', err);
+            }
+
             res.json(result);
         });
 

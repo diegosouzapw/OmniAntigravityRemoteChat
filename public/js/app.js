@@ -1879,6 +1879,101 @@ function showEmptyState() {
     .addEventListener('click', startNewChat);
 }
 
+function renderSnapshot(payload, options = {}) {
+  if (!payload || !payload.html) return;
+  state.chatIsOpen = true;
+
+  const scrollTop = chatContainer.scrollTop;
+  const scrollHeight = chatContainer.scrollHeight;
+  const clientHeight = chatContainer.clientHeight;
+  const isNearBottom = scrollHeight - scrollTop - clientHeight < 140;
+  const isUserLocked = options.forceScrollBottom ? false : (Date.now() < state.userScrollLockUntil);
+
+  if (options.forceScrollBottom) {
+    state.userScrollLockUntil = 0;
+  }
+
+  statsText.textContent = payload.stats
+    ? `${payload.stats.nodes} nodes · ${Math.round((payload.stats.htmlSize + payload.stats.cssSize) / 1024)} KB`
+    : 'Live';
+
+  if (payload.agentActivity !== undefined) {
+    updateAgentActivity(payload.agentActivity);
+  }
+  if (payload.pendingAction !== undefined) {
+    if (!payload.pendingAction || !actedActionIds.has(payload.pendingAction.id)) {
+      renderActionCard(payload.pendingAction);
+    }
+  }
+
+  let styleTag = document.getElementById('cdp-styles');
+  if (!styleTag) {
+    styleTag = document.createElement('style');
+    styleTag.id = 'cdp-styles';
+    document.head.appendChild(styleTag);
+  }
+  styleTag.textContent = buildSnapshotStyles(payload.css || '');
+
+  try {
+    morphdom(
+      chatContent,
+      `<div id="chatContent" class="chat-content snapshot-shell">${payload.html}</div>`
+    );
+  } catch (mErr) {
+    console.warn('morphdom fallback to innerHTML:', mErr);
+    chatContent.className = 'chat-content snapshot-shell';
+    chatContent.innerHTML = payload.html;
+  }
+
+  // Suppress stale snapshot rubber-banding while the user recently selected an option
+  if (activeUserOptionKey && Date.now() - activeUserOptionTime < 2000) {
+    const chosenLabel = chatContent.querySelector(`label[for="${CSS.escape(activeUserOptionKey)}"]`);
+    if (chosenLabel) {
+      const groupContainer = chosenLabel.closest('[role="radiogroup"]') || chosenLabel.parentElement?.parentElement || chatContent;
+      groupContainer.querySelectorAll('label[for^="ask-opt-"]').forEach((l) => {
+        if (l === chosenLabel) {
+          l.classList.add('omni-selected');
+          l.setAttribute('data-checked', 'true');
+          const inp = l.querySelector('input') || (l.getAttribute('for') ? chatContent.querySelector(`#${CSS.escape(l.getAttribute('for'))}`) : null);
+          if (inp) {
+            inp.checked = true;
+            inp.setAttribute('checked', '');
+          }
+        } else {
+          l.classList.remove('omni-selected');
+          l.removeAttribute('data-checked');
+          const inp = l.querySelector('input') || (l.getAttribute('for') ? chatContent.querySelector(`#${CSS.escape(l.getAttribute('for'))}`) : null);
+          if (inp) {
+            inp.checked = false;
+            inp.removeAttribute('checked');
+          }
+        }
+      });
+    }
+  }
+  chatContent.querySelectorAll('details').forEach((details) =>
+    details.setAttribute('open', '')
+  );
+  addMobileCopyButtons();
+
+  const isGenerating = Boolean(
+    payload.isGenerating ||
+    isActiveWorkState(currentAgentActivity) ||
+    chatContent.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]') ||
+    payload.isStreaming
+  );
+  stopBtn?.classList.toggle('active', isGenerating);
+
+  if (options.forceScrollBottom || (!isUserLocked && isNearBottom)) {
+    scrollToBottom(false);
+  } else if (isUserLocked && scrollHeight > 0) {
+    const ratio = scrollTop / scrollHeight;
+    chatContainer.scrollTop = chatContainer.scrollHeight * ratio;
+  } else {
+    chatContainer.scrollTop = scrollTop;
+  }
+}
+
 async function loadSnapshot() {
   try {
     const response = await fetchWithAuth('/snapshot');
@@ -1891,87 +1986,7 @@ async function loadSnapshot() {
     }
 
     const payload = await response.json();
-    state.chatIsOpen = true;
-
-    const scrollTop = chatContainer.scrollTop;
-    const scrollHeight = chatContainer.scrollHeight;
-    const clientHeight = chatContainer.clientHeight;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 140;
-    const isUserLocked = Date.now() < state.userScrollLockUntil;
-
-    statsText.textContent = payload.stats
-      ? `${payload.stats.nodes} nodes · ${Math.round((payload.stats.htmlSize + payload.stats.cssSize) / 1024)} KB`
-      : 'Live';
-
-    if (payload.agentActivity !== undefined) {
-      updateAgentActivity(payload.agentActivity);
-    }
-    if (payload.pendingAction !== undefined) {
-      if (!payload.pendingAction || !actedActionIds.has(payload.pendingAction.id)) {
-        renderActionCard(payload.pendingAction);
-      }
-    }
-
-    let styleTag = document.getElementById('cdp-styles');
-    if (!styleTag) {
-      styleTag = document.createElement('style');
-      styleTag.id = 'cdp-styles';
-      document.head.appendChild(styleTag);
-    }
-    styleTag.textContent = buildSnapshotStyles(payload.css || '');
-
-    morphdom(
-      chatContent,
-      `<div id="chatContent" class="chat-content snapshot-shell">${payload.html}</div>`
-    );
-
-    // Suppress stale snapshot rubber-banding while the user recently selected an option
-    if (activeUserOptionKey && Date.now() - activeUserOptionTime < 2000) {
-      const chosenLabel = chatContent.querySelector(`label[for="${CSS.escape(activeUserOptionKey)}"]`);
-      if (chosenLabel) {
-        const groupContainer = chosenLabel.closest('[role="radiogroup"]') || chosenLabel.parentElement?.parentElement || chatContent;
-        groupContainer.querySelectorAll('label[for^="ask-opt-"]').forEach((l) => {
-          if (l === chosenLabel) {
-            l.classList.add('omni-selected');
-            l.setAttribute('data-checked', 'true');
-            const inp = l.querySelector('input') || (l.getAttribute('for') ? chatContent.querySelector(`#${CSS.escape(l.getAttribute('for'))}`) : null);
-            if (inp) {
-              inp.checked = true;
-              inp.setAttribute('checked', '');
-            }
-          } else {
-            l.classList.remove('omni-selected');
-            l.removeAttribute('data-checked');
-            const inp = l.querySelector('input') || (l.getAttribute('for') ? chatContent.querySelector(`#${CSS.escape(l.getAttribute('for'))}`) : null);
-            if (inp) {
-              inp.checked = false;
-              inp.removeAttribute('checked');
-            }
-          }
-        });
-      }
-    }
-    chatContent.querySelectorAll('details').forEach((details) =>
-      details.setAttribute('open', '')
-    );
-    addMobileCopyButtons();
-
-    const isGenerating = Boolean(
-      payload.isGenerating ||
-      isActiveWorkState(currentAgentActivity) ||
-      chatContent.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]') ||
-      payload.isStreaming
-    );
-    stopBtn?.classList.toggle('active', isGenerating);
-
-    if (!isUserLocked && isNearBottom) {
-      scrollToBottom(false);
-    } else if (isUserLocked && scrollHeight > 0) {
-      const ratio = scrollTop / scrollHeight;
-      chatContainer.scrollTop = chatContainer.scrollHeight * ratio;
-    } else {
-      chatContainer.scrollTop = scrollTop;
-    }
+    renderSnapshot(payload);
   } catch (error) {
     console.error(error);
   }
@@ -2331,6 +2346,7 @@ function hideChatHistory() {
 
 async function selectChat(title, chatId) {
   try {
+    showSlideInNotification(`Switching to "${title || 'conversation'}"...`, 'info');
     const response = await fetchWithAuth('/select-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2341,8 +2357,13 @@ async function selectChat(title, chatId) {
       throw new Error(payload.error || 'Could not switch conversation');
     }
     showSlideInNotification(`Switched to "${title || 'conversation'}"`, 'success');
-    setTimeout(loadSnapshot, 300);
-    setTimeout(loadSnapshot, 900);
+    if (payload.snapshot && payload.snapshot.html) {
+      renderSnapshot(payload.snapshot, { forceScrollBottom: true });
+    } else {
+      await loadSnapshot();
+    }
+    setTimeout(loadSnapshot, 400);
+    setTimeout(loadSnapshot, 1000);
   } catch (error) {
     showSlideInNotification(error.message, 'error');
   }
