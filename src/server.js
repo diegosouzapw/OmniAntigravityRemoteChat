@@ -1857,169 +1857,175 @@ async function startNewChat(cdp) {
 }
 /**
  * Click the history button and scrape the conversation list.
+ * Accurately extracts conversations from Antigravity Jetski fast-pick or side-panels.
+ * Prevents Explorer / file tree false positives.
  * @param {import('./state.js').CDPConnection} cdp
- * @returns {Promise<{success?: boolean, chats: Array<{title: string, date: string}>, debug?: object, error?: string}>}
+ * @returns {Promise<{success?: boolean, chats: Array<{id?: string, chatId?: string, title: string, workspace?: string, date: string, active?: boolean}>, debug?: object, error?: string}>}
  */
 async function getChatHistory(cdp) {
     const EXP = `(async () => {
         try {
             const chats = [];
+            const seenIds = new Set();
             const seenTitles = new Set();
 
-            // Priority 1: Look for tooltip ID pattern (history/past/recent)
-            let historyBtn = document.querySelector('[data-tooltip-id*="history"], [data-tooltip-id*="past"], [data-tooltip-id*="recent"], [data-tooltip-id*="conversation-history"]');
-            
-            // Priority 2: Look for button ADJACENT to the new chat button
-            if (!historyBtn) {
-                const newChatBtn = document.querySelector('[data-tooltip-id="new-conversation-tooltip"]');
-                if (newChatBtn) {
-                    const parent = newChatBtn.parentElement;
-                    if (parent) {
-                        const siblings = Array.from(parent.children).filter(el => el !== newChatBtn);
-                        historyBtn = siblings.find(el => el.tagName === 'A' || el.tagName === 'BUTTON' || el.getAttribute('role') === 'button');
-                    }
-                }
-            }
+            // 1. Check if fast-pick or conversation listbox is ALREADY open and visible
+            let fastPick = document.querySelector('.jetski-fast-pick');
+            let isVisible = fastPick && (fastPick.offsetParent !== null || window.getComputedStyle(fastPick).display !== 'none');
 
-            // Fallback: Use previous heuristics (icon/aria-label)
-            if (!historyBtn) {
-                const allButtons = Array.from(document.querySelectorAll('button, [role="button"], a[data-tooltip-id]'));
-                for (const btn of allButtons) {
-                    if (btn.offsetParent === null) continue;
-                    const hasHistoryIcon = btn.querySelector('svg.lucide-clock') ||
-                                           btn.querySelector('svg.lucide-history') ||
-                                           btn.querySelector('svg.lucide-folder') ||
-                                           btn.querySelector('svg[class*="clock"]') ||
-                                           btn.querySelector('svg[class*="history"]');
-                    if (hasHistoryIcon) {
-                        historyBtn = btn;
-                        break;
-                    }
-                }
-            }
-            
-            if (!historyBtn) {
-                return { error: 'History button not found', chats: [] };
-            }
-
-            // Click and Wait
-            historyBtn.click();
-            await new Promise(r => setTimeout(r, 2000));
-            
-            // Find the side panel
-            let panel = null;
-            let inputsFoundDebug = [];
-            
-            // Strategy 1: The search input has specific placeholder
-            let searchInput = null;
-            const inputs = Array.from(document.querySelectorAll('input'));
-            searchInput = inputs.find(i => {
-                const ph = (i.placeholder || '').toLowerCase();
-                return ph.includes('select') || ph.includes('conversation');
-            });
-            
-            // Strategy 2: Look for any text input that looks like a search bar (based on user snippet classes)
-            if (!searchInput) {
-                const allInputs = Array.from(document.querySelectorAll('input[type="text"]'));
-                inputsFoundDebug = allInputs.map(i => 'ph:' + i.placeholder + ', cls:' + i.className);
-                
-                searchInput = allInputs.find(i => 
-                    i.offsetParent !== null && 
-                    (i.className.includes('w-full') || i.classList.contains('w-full'))
+            // 2. If not open, locate the history toggle button and open it
+            if (!isVisible) {
+                let historyBtn = document.querySelector(
+                    '[data-past-conversations-toggle="true"], ' +
+                    '[data-tooltip-id="history-tooltip"], ' +
+                    '[data-tooltip-id*="conversation-history"], ' +
+                    '[data-tooltip-id*="history"], ' +
+                    '[data-tooltip-id*="past-conversations"]'
                 );
-            }
-            
-            // Strategy 3: Find known text in the panel (Anchor Text Strategy)
-            let anchorElement = null;
-            if (!searchInput) {
-                 const allSpans = Array.from(document.querySelectorAll('span, div, p'));
-                 anchorElement = allSpans.find(s => {
-                     const t = (s.innerText || '').trim();
-                     return t === 'Current' || t === 'Refining Chat History Scraper'; // specific known title
-                 });
-            }
 
-            const startElement = searchInput || anchorElement;
+                // Priority 2: Look for button ADJACENT to the new chat button
+                if (!historyBtn) {
+                    const newChatBtn = document.querySelector('[data-tooltip-id="new-conversation-tooltip"], [data-tooltip-id*="new-chat"]');
+                    if (newChatBtn?.parentElement) {
+                        const siblings = Array.from(newChatBtn.parentElement.children).filter(el => el !== newChatBtn);
+                        historyBtn = siblings.find(el => 
+                            el.getAttribute('data-tooltip-id')?.includes('history') ||
+                            el.querySelector('svg.lucide-history, svg.lucide-clock, svg.lucide-clock-rotate-left, svg[class*="history"], svg[class*="clock"]')
+                        );
+                    }
+                }
 
-            if (startElement) {
-                // Walk up to find the panel container
-                let container = startElement;
-                for (let i = 0; i < 15; i++) { 
-                    if (!container.parentElement) break;
-                    container = container.parentElement;
-                    const rect = container.getBoundingClientRect();
-                    
-                    // Panel should have good dimensions
-                    // Relaxed constraints for mobile
-                    if (rect.width > 50 && rect.height > 100) {
-                        panel = container;
-                        
-                        // If it looks like a modal/popover (fixed or absolute pos), that's definitely it
-                        const style = window.getComputedStyle(container);
-                        if (style.position === 'fixed' || style.position === 'absolute' || style.zIndex > 10) {
+                // Priority 3: Scan buttons/links with explicit history iconography (NEVER folder icon)
+                if (!historyBtn) {
+                    const allButtons = Array.from(document.querySelectorAll('a, button, [role="button"]'));
+                    for (const btn of allButtons) {
+                        if (btn.offsetParent === null) continue;
+                        const label = (btn.getAttribute('data-tooltip-id') || btn.getAttribute('aria-label') || btn.getAttribute('title') || '').toLowerCase();
+                        if (label.includes('file') || label.includes('explorer') || label.includes('folder')) continue;
+                        if (label.includes('history') || label.includes('past conversation')) {
+                            historyBtn = btn;
+                            break;
+                        }
+                        const hasHistoryIcon = btn.querySelector('svg.lucide-clock') ||
+                                               btn.querySelector('svg.lucide-history') ||
+                                               btn.querySelector('svg.lucide-clock-rotate-left') ||
+                                               btn.querySelector('svg[class*="clock"]') ||
+                                               btn.querySelector('svg[class*="history"]');
+                        if (hasHistoryIcon) {
+                            historyBtn = btn;
                             break;
                         }
                     }
                 }
-                
-                // Fallback if loop finishes without specific break
-                if (!panel && startElement) {
-                     // Just go up 4 levels
-                     let p = startElement;
-                     for(let k=0; k<4; k++) { if(p.parentElement) p = p.parentElement; }
-                     panel = p;
-                }
-            }
-            
-            const debugInfo = { 
-                panelFound: !!panel, 
-                panelWidth: panel?.offsetWidth || 0,
-                inputFound: !!searchInput,
-                anchorFound: !!anchorElement,
-                inputsDebug: inputsFoundDebug.slice(0, 5)
-            };
-            
-            if (panel) {
-                // Chat titles are in <span> elements
-                const spans = Array.from(panel.querySelectorAll('span'));
-                
-                // Section headers to skip
-                const SKIP_EXACT = new Set([
-                    'current', 'other conversations', 'now'
-                ]);
-                
-                for (const span of spans) {
-                    const text = span.textContent?.trim() || '';
-                    const lower = text.toLowerCase();
-                    
-                    // Skip empty or too short
-                    if (text.length < 3) continue;
-                    
-                    // Skip section headers
-                    if (SKIP_EXACT.has(lower)) continue;
-                    if (lower.startsWith('recent in ')) continue;
-                    if (lower.startsWith('show ') && lower.includes('more')) continue;
-                    
-                    // Skip timestamps
-                    if (lower.endsWith(' ago') || /^\\d+\\s*(sec|min|hr|day|wk|mo|yr)/i.test(lower)) continue;
-                    
-                    // Skip very long text (containers)
-                    if (text.length > 100) continue;
-                    
-                    // Skip duplicates
-                    if (seenTitles.has(text)) continue;
-                    
-                    seenTitles.add(text);
-                    chats.push({ title: text, date: 'Recent' });
-                    
-                    if (chats.length >= 50) break;
-                }
-            }
-            
-            // Note: Panel is left open on PC as requested ("launch history on pc")
 
-            return { success: true, chats: chats, debug: debugInfo };
-        } catch(e) {
+                if (!historyBtn) {
+                    return { error: 'History button not found', chats: [] };
+                }
+
+                // Click once to open
+                historyBtn.click();
+
+                // Wait for fast pick to appear
+                for (let i = 0; i < 20; i++) {
+                    await new Promise(r => setTimeout(r, 100));
+                    fastPick = document.querySelector('.jetski-fast-pick');
+                    if (fastPick && (fastPick.offsetParent !== null || window.getComputedStyle(fastPick).display !== 'none')) {
+                        break;
+                    }
+                }
+            }
+
+            if (fastPick) {
+                // Scrape conversation options from Antigravity fast-pick
+                const options = Array.from(fastPick.querySelectorAll('[role="option"], [id^="fastpick-item-"]'));
+                for (const opt of options) {
+                    if (opt.id && opt.id.startsWith('fastpick-show-more')) continue;
+                    const text = opt.innerText?.trim() || '';
+                    if (text.startsWith('Show ') && text.includes('more')) continue;
+
+                    const fullId = opt.id || '';
+                    const chatId = fullId.startsWith('fastpick-item-') ? fullId.replace('fastpick-item-', '') : fullId;
+
+                    // Title extraction
+                    const titleSpan = opt.querySelector('.truncate > span') || opt.querySelector('.truncate') || opt.querySelector('span');
+                    const title = titleSpan?.textContent?.trim() || text.split('\\n')[0] || '';
+                    if (!title || title.length < 2) continue;
+
+                    // Workspace extraction
+                    const wsBdi = opt.querySelector('bdi > span') || opt.querySelector('bdi') || opt.querySelector('.opacity-50');
+                    const workspace = wsBdi?.textContent?.trim() || '';
+
+                    // Relative timestamp extraction
+                    const dateSpan = opt.querySelector('span.ml-4, span[class*="ml-4"]') || opt.querySelector('span.text-xs.opacity-50.ml-4');
+                    let date = dateSpan?.textContent?.trim() || '';
+                    if (!date || date === workspace || date.includes('/')) {
+                        date = 'Recent';
+                    }
+
+                    // Active state
+                    const isActive = opt.getAttribute('aria-selected') === 'true' ||
+                                     !!opt.closest('.flex-col')?.querySelector('.text-muted-foreground')?.textContent?.includes('Current');
+
+                    const dedupeKey = chatId || title;
+                    if (seenIds.has(dedupeKey)) continue;
+                    seenIds.add(dedupeKey);
+
+                    chats.push({
+                        id: fullId,
+                        chatId: chatId,
+                        title: title,
+                        workspace: workspace,
+                        date: date,
+                        active: isActive
+                    });
+
+                    if (chats.length >= 60) break;
+                }
+            }
+
+            // Fallback for non-fastpick side panels (strictly scoped inside a dialog/popup, never <html>)
+            if (chats.length === 0) {
+                const searchInput = Array.from(document.querySelectorAll('input')).find(i => {
+                    const ph = (i.placeholder || '').toLowerCase();
+                    return (ph.includes('search') && ph.includes('convo')) || ph.includes('conversation');
+                });
+                if (searchInput) {
+                    let container = searchInput.parentElement;
+                    while (container && container !== document.body && container !== document.documentElement) {
+                        const style = window.getComputedStyle(container);
+                        if (style.position === 'fixed' || style.position === 'absolute' || parseInt(style.zIndex, 10) > 10) {
+                            break;
+                        }
+                        container = container.parentElement;
+                    }
+                    if (container && container !== document.body && container !== document.documentElement) {
+                        const items = Array.from(container.querySelectorAll('[role="option"], [data-conversation-id]'));
+                        for (const item of items) {
+                            const title = item.innerText?.split('\\n')[0]?.trim();
+                            if (title && !seenTitles.has(title)) {
+                                seenTitles.add(title);
+                                chats.push({
+                                    id: item.id || '',
+                                    chatId: item.id || '',
+                                    title: title,
+                                    date: 'Recent',
+                                    active: item.getAttribute('aria-selected') === 'true'
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            return {
+                success: true,
+                chats,
+                debug: {
+                    chatsFound: chats.length,
+                    fastPickFound: !!fastPick
+                }
+            };
+        } catch (e) {
             return { error: e.toString(), chats: [] };
         }
     })()`;
@@ -2035,10 +2041,10 @@ async function getChatHistory(cdp) {
             });
             if (res.result?.value) {
                 const val = res.result.value;
+                if (val.success && val.chats && val.chats.length > 0) return val;
                 if (val.success) return val;
                 if (val.error) lastError = val.error;
             }
-            // If result.value is null/undefined but no error thrown, check exceptionDetails
             if (res.exceptionDetails) {
                 lastError = res.exceptionDetails.exception?.description || res.exceptionDetails.text;
             }
@@ -2050,114 +2056,103 @@ async function getChatHistory(cdp) {
 }
 
 /**
- * Select a specific chat from the history panel by title.
+ * Select a specific chat from the history panel by title or conversation ID.
  * @param {import('./state.js').CDPConnection} cdp
- * @param {string} chatTitle
+ * @param {string} [chatTitle]
+ * @param {string} [chatId]
  * @returns {Promise<{success?: boolean, method?: string, error?: string}>}
  */
-async function selectChat(cdp, chatTitle) {
-    const safeChatTitle = JSON.stringify(chatTitle);
+async function selectChat(cdp, chatTitle, chatId) {
+    const safeChatTitle = JSON.stringify(chatTitle || '');
+    const safeChatId = JSON.stringify(chatId || '');
 
     const EXP = `(async () => {
-    try {
-        const targetTitle = ${safeChatTitle};
+        try {
+            const targetTitle = ${safeChatTitle};
+            const targetId = ${safeChatId};
 
-        // First, we need to open the history panel
-        // Find the history button at the top (next to + button)
-        const allButtons = Array.from(document.querySelectorAll('button, [role="button"]'));
+            // 1. Ensure history modal is open and visible
+            let fastPick = document.querySelector('.jetski-fast-pick');
+            const isVisible = fastPick && (fastPick.offsetParent !== null || window.getComputedStyle(fastPick).display !== 'none');
 
-        let historyBtn = null;
+            if (!isVisible) {
+                let historyBtn = document.querySelector(
+                    '[data-past-conversations-toggle="true"], ' +
+                    '[data-tooltip-id="history-tooltip"], ' +
+                    '[data-tooltip-id*="conversation-history"], ' +
+                    '[data-tooltip-id*="history"], ' +
+                    '[data-tooltip-id*="past-conversations"]'
+                );
 
-        // Find by icon type
-        for (const btn of allButtons) {
-            if (btn.offsetParent === null) continue;
-            const hasHistoryIcon = btn.querySelector('svg.lucide-clock') ||
-                btn.querySelector('svg.lucide-history') ||
-                btn.querySelector('svg.lucide-folder') ||
-                btn.querySelector('svg.lucide-clock-rotate-left');
-            if (hasHistoryIcon) {
-                historyBtn = btn;
-                break;
-            }
-        }
-
-        // Fallback: Find by position (second button at top)
-        if (!historyBtn) {
-            const topButtons = allButtons.filter(btn => {
-                if (btn.offsetParent === null) return false;
-                const rect = btn.getBoundingClientRect();
-                return rect.top < 100 && rect.top > 0;
-            }).sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-
-            if (topButtons.length >= 2) {
-                historyBtn = topButtons[1];
-            }
-        }
-
-        if (historyBtn) {
-            historyBtn.click();
-            await new Promise(r => setTimeout(r, 600));
-        }
-
-        // Now find the chat by title in the opened panel
-        await new Promise(r => setTimeout(r, 200));
-
-        const allElements = Array.from(document.querySelectorAll('*'));
-
-        // Find elements matching the title
-        const candidates = allElements.filter(el => {
-            if (el.offsetParent === null) return false;
-            const text = el.innerText?.trim();
-            return text && text.startsWith(targetTitle.substring(0, Math.min(30, targetTitle.length)));
-        });
-
-        // Find the most specific (deepest) visible element with the title
-        let target = null;
-        let maxDepth = -1;
-
-        for (const el of candidates) {
-            // Skip if it has too many children (likely a container)
-            if (el.children.length > 5) continue;
-
-            let depth = 0;
-            let parent = el;
-            while (parent) {
-                depth++;
-                parent = parent.parentElement;
-            }
-
-            if (depth > maxDepth) {
-                maxDepth = depth;
-                target = el;
-            }
-        }
-
-        if (target) {
-            // Find clickable parent if needed
-            let clickable = target;
-            for (let i = 0; i < 5; i++) {
-                if (!clickable) break;
-                const style = window.getComputedStyle(clickable);
-                if (style.cursor === 'pointer' || clickable.tagName === 'BUTTON') {
-                    break;
+                if (!historyBtn) {
+                    const newChatBtn = document.querySelector('[data-tooltip-id="new-conversation-tooltip"], [data-tooltip-id*="new-chat"]');
+                    if (newChatBtn?.parentElement) {
+                        const siblings = Array.from(newChatBtn.parentElement.children).filter(el => el !== newChatBtn);
+                        historyBtn = siblings.find(el => 
+                            el.getAttribute('data-tooltip-id')?.includes('history') ||
+                            el.querySelector('svg.lucide-history, svg.lucide-clock, svg.lucide-clock-rotate-left, svg[class*="history"], svg[class*="clock"]')
+                        );
+                    }
                 }
-                clickable = clickable.parentElement;
+
+                if (historyBtn) {
+                    historyBtn.click();
+                    for (let i = 0; i < 20; i++) {
+                        await new Promise(r => setTimeout(r, 100));
+                        fastPick = document.querySelector('.jetski-fast-pick');
+                        if (fastPick && (fastPick.offsetParent !== null || window.getComputedStyle(fastPick).display !== 'none')) {
+                            break;
+                        }
+                    }
+                }
             }
 
-            if (clickable) {
-                clickable.click();
-                return { success: true, method: 'clickable_parent' };
+            // Strategy 1: Find by exact ID
+            if (targetId) {
+                const byId = document.getElementById(targetId) || 
+                             document.getElementById('fastpick-item-' + targetId);
+                if (byId && typeof byId.click === 'function') {
+                    byId.click();
+                    return { success: true, method: 'chatId_match', id: targetId };
+                }
             }
 
-            target.click();
-            return { success: true, method: 'direct_click' };
+            // Strategy 2: Find option by title inside fastPick
+            if (fastPick) {
+                const options = Array.from(fastPick.querySelectorAll('[role="option"], [id^="fastpick-item-"]'));
+                const match = options.find(opt => {
+                    const text = (opt.innerText || '').toLowerCase();
+                    const target = (targetTitle || '').toLowerCase();
+                    return target && (text.includes(target) || text.includes(target.slice(0, 20)));
+                });
+
+                if (match) {
+                    match.click();
+                    return { success: true, method: 'fastpick_title_match', title: targetTitle };
+                }
+            }
+
+            // Strategy 3: Fast-pick search input fallback
+            if (fastPick && targetTitle) {
+                const searchInput = fastPick.querySelector('input');
+                if (searchInput) {
+                    searchInput.focus();
+                    searchInput.value = targetTitle.slice(0, 30);
+                    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    await new Promise(r => setTimeout(r, 200));
+                    const firstOption = fastPick.querySelector('[role="option"], [id^="fastpick-item-"]');
+                    if (firstOption) {
+                        firstOption.click();
+                        return { success: true, method: 'fastpick_search_match', title: targetTitle };
+                    }
+                }
+            }
+
+            return { error: 'Chat not found: ' + (targetTitle || targetId) };
+        } catch (e) {
+            return { error: e.toString() };
         }
-
-        return { error: 'Chat not found: ' + targetTitle };
-    } catch (e) {
-        return { error: e.toString() };
-    }
-})()`;
+    })()`;
 
     for (const ctx of cdp.contexts) {
         try {
@@ -2926,8 +2921,9 @@ function broadcastCDPStatus(status) {
         // Periodically refresh available targets list (multi-window)
         try {
             availableTargets = await discoverAllCDP();
-            if (!activeTargetId && availableTargets.length === 1) {
-                activeTargetId = availableTargets[0].id;
+            if (!activeTargetId && availableTargets.length > 0) {
+                const currentMatch = cdpConnection?.ws?.url ? availableTargets.find(t => t.wsUrl === cdpConnection.ws.url) : null;
+                activeTargetId = currentMatch ? currentMatch.id : availableTargets[0].id;
             }
         } catch (e) { /* ignore */ }
 
@@ -5043,6 +5039,13 @@ async function main() {
 
         // Multi-Window: List all available CDP targets
         app.get('/cdp-targets', async (req, res) => {
+            try {
+                availableTargets = await discoverAllCDP();
+                if (!activeTargetId && availableTargets.length > 0) {
+                    const currentMatch = cdpConnection?.ws?.url ? availableTargets.find(t => t.wsUrl === cdpConnection.ws.url) : null;
+                    activeTargetId = currentMatch ? currentMatch.id : availableTargets[0].id;
+                }
+            } catch (_) {}
             res.json({
                 targets: availableTargets,
                 activeTarget: activeTargetId,
@@ -5054,6 +5057,13 @@ async function main() {
         app.post('/select-target', async (req, res) => {
             const { targetId } = req.body;
             if (!targetId) return res.status(400).json({ error: 'targetId required' });
+
+            // Refresh available targets in case new windows opened
+            if (!availableTargets.some(t => t.id === targetId)) {
+                try {
+                    availableTargets = await discoverAllCDP();
+                } catch (_) {}
+            }
 
             const target = availableTargets.find(t => t.id === targetId);
             if (!target) return res.status(404).json({ error: 'Target not found. Refresh targets.' });
@@ -5114,10 +5124,11 @@ async function main() {
 
         // Select a Chat
         app.post('/select-chat', async (req, res) => {
-            const { title } = req.body;
-            if (!title) return res.status(400).json({ error: 'Chat title required' });
+            const { title, chatId, id } = req.body;
+            const target = title || chatId || id;
+            if (!target) return res.status(400).json({ error: 'Chat title or ID required' });
             if (!cdpConnection) return res.status(503).json({ error: 'CDP disconnected' });
-            const result = await selectChat(cdpConnection, title);
+            const result = await selectChat(cdpConnection, title, chatId || id);
             res.json(result);
         });
 

@@ -2232,6 +2232,27 @@ async function checkChatStatus() {
 
 async function showChatHistory() {
   historyLayer.classList.add('show');
+  
+  const historyActiveWindow = document.getElementById('historyActiveWindow');
+  const historySwitchWindowBtn = document.getElementById('historySwitchWindowBtn');
+  if (historySwitchWindowBtn && !historySwitchWindowBtn._bound) {
+    historySwitchWindowBtn._bound = true;
+    historySwitchWindowBtn.addEventListener('click', () => {
+      showTargetSelector();
+    });
+  }
+
+  // Update active IDE window header
+  fetchWithAuth('/cdp-targets')
+    .then((r) => r.json())
+    .then((data) => {
+      const active = (data.targets || []).find((t) => t.id === data.activeTarget);
+      if (historyActiveWindow) {
+        historyActiveWindow.textContent = active ? active.title : (targetText.textContent || 'Antigravity IDE');
+      }
+    })
+    .catch(() => {});
+
   historyList.innerHTML = `
     <div class="loading-state">
       <div class="loading-spinner"></div>
@@ -2259,19 +2280,44 @@ async function showChatHistory() {
     }
 
     historyList.innerHTML = chats
-      .map(
-        (chat) => `
-          <button class="history-item ${chat.active ? 'active' : ''}" data-chat-title="${chat.title.replaceAll('"', '&quot;')}">
-            <span>${chat.title}</span>
-            <span class="stat-micro">${chat.active ? 'ACTIVE' : 'Open'}</span>
+      .map((chat) => {
+        const safeTitle = (chat.title || '').replaceAll('"', '&quot;');
+        const safeId = (chat.chatId || chat.id || '').replaceAll('"', '&quot;');
+        const safeWorkspace = (chat.workspace || '').replaceAll('"', '&quot;');
+        const activeClass = chat.active ? 'active' : '';
+        const actionLabel = chat.active ? 'ACTIVE' : 'Switch';
+
+        let subRow = '';
+        if (chat.workspace || chat.date) {
+          subRow = `
+            <div class="history-sub-row">
+              ${chat.workspace ? `<span class="history-workspace-chip" title="${safeWorkspace}">${chat.workspace}</span>` : ''}
+              ${chat.date ? `<span class="history-time-chip">${chat.date}</span>` : ''}
+            </div>
+          `;
+        }
+
+        return `
+          <button class="history-item ${activeClass}" data-chat-title="${safeTitle}" data-chat-id="${safeId}">
+            <div class="history-item-main">
+              <div class="history-title-row">
+                <span class="history-title">${chat.title}</span>
+                ${chat.active ? '<span class="history-active-badge">Active</span>' : ''}
+              </div>
+              ${subRow}
+            </div>
+            <span class="stat-micro history-action-btn">${actionLabel}</span>
           </button>
-        `
-      )
+        `;
+      })
       .join('');
-    historyList.querySelectorAll('[data-chat-title]').forEach((button) => {
+
+    historyList.querySelectorAll('.history-item').forEach((button) => {
       button.addEventListener('click', async () => {
+        const title = button.getAttribute('data-chat-title');
+        const chatId = button.getAttribute('data-chat-id');
         hideChatHistory();
-        await selectChat(button.getAttribute('data-chat-title'));
+        await selectChat(title, chatId);
       });
     });
   } catch (error) {
@@ -2283,17 +2329,18 @@ function hideChatHistory() {
   historyLayer.classList.remove('show');
 }
 
-async function selectChat(title) {
+async function selectChat(title, chatId) {
   try {
     const response = await fetchWithAuth('/select-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ title, chatId }),
     });
     const payload = await response.json();
     if (!payload.success) {
       throw new Error(payload.error || 'Could not switch conversation');
     }
+    showSlideInNotification(`Switched to "${title || 'conversation'}"`, 'success');
     setTimeout(loadSnapshot, 300);
     setTimeout(loadSnapshot, 900);
   } catch (error) {
@@ -2353,6 +2400,11 @@ async function showTargetSelector() {
         throw new Error(switchPayload.error || 'Window switch failed');
       }
       targetText.textContent = switchPayload.target;
+      const historyActiveWindow = document.getElementById('historyActiveWindow');
+      if (historyActiveWindow) historyActiveWindow.textContent = switchPayload.target;
+      if (historyLayer.classList.contains('show')) {
+        setTimeout(showChatHistory, 500);
+      }
       setTimeout(loadSnapshot, 1200);
       setTimeout(fetchAppState, 1500);
     });
