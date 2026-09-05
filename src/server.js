@@ -5179,9 +5179,44 @@ async function main() {
 
         // Select a Chat
         app.post('/select-chat', async (req, res) => {
-            const { title, chatId, id } = req.body;
+            const { title, chatId, id, workspace } = req.body;
             const target = title || chatId || id;
             if (!target) return res.status(400).json({ error: 'Chat title or ID required' });
+
+            // If the chat belongs to a workspace with an already open IDE window, switch to it automatically!
+            let switchedTarget = null;
+            if (workspace) {
+                const normWs = workspace.toLowerCase().split('/').filter(Boolean).pop()?.replace(/[^a-z0-9]/g, '') || '';
+                if (normWs && availableTargets && availableTargets.length > 1) {
+                    const matchTarget = availableTargets.find(t => {
+                        const normTitle = (t.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                        return normTitle.includes(normWs) || normWs.includes(normTitle);
+                    });
+
+                    if (matchTarget && matchTarget.id !== activeTargetId) {
+                        try {
+                            if (cdpConnection?.ws) {
+                                await stopScreencast();
+                                cdpConnection.ws.close();
+                                cdpConnection = null;
+                            }
+                            console.log(`🔀 Auto-switching window to match conversation workspace: ${matchTarget.title}`);
+                            cdpConnection = await connectCDP(matchTarget.wsUrl);
+                            activeTargetId = matchTarget.id;
+                            switchedTarget = matchTarget.title;
+                            broadcast({
+                                type: 'cdp_status',
+                                status: 'connected',
+                                targetId: matchTarget.id,
+                                targetTitle: matchTarget.title
+                            });
+                        } catch (swErr) {
+                            console.warn('Auto target switch failed, continuing with current window:', swErr.message);
+                        }
+                    }
+                }
+            }
+
             if (!cdpConnection) return res.status(503).json({ error: 'CDP disconnected' });
             const result = await selectChat(cdpConnection, title, chatId || id);
             if (!result.success) {
@@ -5210,6 +5245,7 @@ async function main() {
 
                     return res.json({
                         ...result,
+                        switchedTarget,
                         snapshot: {
                             ...freshSnapshot,
                             agentActivity: freshSnapshot.agentActivity || 'Idle',
@@ -5221,7 +5257,7 @@ async function main() {
                 console.warn('Post-selectChat snapshot capture error:', err);
             }
 
-            res.json(result);
+            res.json({ ...result, switchedTarget });
         });
 
         // Check if Chat is Open

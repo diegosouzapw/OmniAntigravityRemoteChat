@@ -2313,7 +2313,7 @@ async function showChatHistory() {
         }
 
         return `
-          <button class="history-item ${activeClass}" data-chat-title="${safeTitle}" data-chat-id="${safeId}">
+          <button class="history-item ${activeClass}" data-chat-title="${safeTitle}" data-chat-id="${safeId}" data-workspace="${safeWorkspace}">
             <div class="history-item-main">
               <div class="history-title-row">
                 <span class="history-title">${chat.title}</span>
@@ -2331,8 +2331,9 @@ async function showChatHistory() {
       button.addEventListener('click', async () => {
         const title = button.getAttribute('data-chat-title');
         const chatId = button.getAttribute('data-chat-id');
+        const workspace = button.getAttribute('data-workspace');
         hideChatHistory();
-        await selectChat(title, chatId);
+        await selectChat(title, chatId, workspace);
       });
     });
   } catch (error) {
@@ -2344,19 +2345,24 @@ function hideChatHistory() {
   historyLayer.classList.remove('show');
 }
 
-async function selectChat(title, chatId) {
+async function selectChat(title, chatId, workspace) {
   try {
     showSlideInNotification(`Switching to "${title || 'conversation'}"...`, 'info');
     const response = await fetchWithAuth('/select-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, chatId }),
+      body: JSON.stringify({ title, chatId, workspace }),
     });
     const payload = await response.json();
     if (!payload.success) {
       throw new Error(payload.error || 'Could not switch conversation');
     }
-    showSlideInNotification(`Switched to "${title || 'conversation'}"`, 'success');
+    const windowMsg = payload.switchedTarget ? ` (${payload.switchedTarget.split(' - ')[0]})` : '';
+    showSlideInNotification(`Switched to "${title || 'conversation'}"${windowMsg}`, 'success');
+    if (payload.switchedTarget) {
+      if (historyActiveWindow) historyActiveWindow.textContent = payload.switchedTarget;
+      if (targetText) targetText.textContent = payload.switchedTarget;
+    }
     if (payload.snapshot && payload.snapshot.html) {
       renderSnapshot(payload.snapshot, { forceScrollBottom: true });
     } else {

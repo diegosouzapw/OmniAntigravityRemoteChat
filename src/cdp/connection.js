@@ -111,9 +111,15 @@ export async function connectCDP(url) {
     /** @type {Array<{id: number, name: string, origin: string}>} */
     const contexts = [];
     /** @type {Map<string, Set<(params: any) => void>>} */
-    const eventListeners = new Map();
-
     // Single centralized message handler
+    ws.on('close', () => {
+        for (const [id, { reject, timeoutId }] of pendingCalls.entries()) {
+            clearTimeout(timeoutId);
+            pendingCalls.delete(id);
+            try { reject(new Error('CDP connection closed')); } catch (_) {}
+        }
+    });
+
     ws.on('message', (msg) => {
         try {
             const data = JSON.parse(/** @type {string} */(msg.toString()));
