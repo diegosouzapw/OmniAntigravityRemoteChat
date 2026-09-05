@@ -154,35 +154,39 @@ body.compact-mode .action-card-slot {
    Interactive Question Prompts (Mirrored Antigravity Ask Question & Grill-Me)
    ========================================================================== */
 
+/* Disable layout sliding animations inside question radiogroups */
+div[role="radiogroup"],
+div[role="radiogroup"] > div,
+label[for^="ask-opt-"] {
+  animation: none !important;
+}
+
 label[for^="ask-opt-"] {
   position: relative !important;
   display: flex !important;
   align-items: center !important;
-  gap: 10px !important;
-  padding: 10px 14px !important;
-  margin: 6px 0 !important;
-  background: var(--bg-card, rgba(255, 255, 255, 0.05)) !important;
+  gap: 12px !important;
+  padding: 12px 14px !important;
+  margin: 8px 0 !important;
+  background: var(--bg-card, rgba(255, 255, 255, 0.04)) !important;
   border: 1.5px solid var(--border, rgba(148, 163, 184, 0.22)) !important;
   border-radius: var(--radius-md, 12px) !important;
   cursor: pointer !important;
   user-select: none !important;
   -webkit-user-select: none !important;
   -webkit-tap-highlight-color: transparent !important;
-  transition: all 0.16s ease !important;
+  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease !important;
   box-sizing: border-box !important;
 }
 
 label[for^="ask-opt-"]:hover {
-  background: var(--bg-card-hover, rgba(255, 255, 255, 0.09)) !important;
+  background: var(--bg-card-hover, rgba(255, 255, 255, 0.08)) !important;
   border-color: var(--accent, #1d9bf0) !important;
 }
 
-/* Instant tactile touch feedback */
-label[for^="ask-opt-"]:active,
-label[for^="ask-opt-"].omni-tap-active {
-  transform: scale(0.975) !important;
-  background: var(--accent-soft, rgba(29, 155, 240, 0.16)) !important;
-  border-color: var(--accent, #1d9bf0) !important;
+/* Instant native touch response */
+label[for^="ask-opt-"]:active {
+  transform: scale(0.98) !important;
 }
 
 /* Selected state: high-contrast border, soft glow, and accent background */
@@ -201,9 +205,14 @@ label[for^="ask-opt-"]:has(input:checked) > span {
   font-weight: 600 !important;
 }
 
-/* Highlight the option ID badge (e.g. 1, 2, A1, A2) */
+/* Option ID badge (e.g. 1, 2, A1, A2) */
 label[for^="ask-opt-"] div.shrink-0 {
-  transition: all 0.16s ease !important;
+  background: rgba(148, 163, 184, 0.15) !important;
+  color: var(--text-muted, #94a3b8) !important;
+  border: 1px solid rgba(148, 163, 184, 0.25) !important;
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+  transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease !important;
 }
 
 label[for^="ask-opt-"].omni-selected div.shrink-0,
@@ -211,7 +220,9 @@ label[for^="ask-opt-"][data-checked="true"] div.shrink-0,
 label[for^="ask-opt-"]:has(input:checked) div.shrink-0 {
   background: var(--accent, #1d9bf0) !important;
   border-color: var(--accent, #1d9bf0) !important;
-  box-shadow: 0 0 10px rgba(29, 155, 240, 0.5) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 8px rgba(29, 155, 240, 0.5) !important;
 }
 
 label[for^="ask-opt-"].omni-selected div.shrink-0 span,
@@ -235,7 +246,7 @@ button[data-testid="interaction-continue-button"] {
   border: none !important;
   box-shadow: 0 4px 14px rgba(29, 155, 240, 0.35) !important;
   cursor: pointer !important;
-  transition: all 0.15s ease !important;
+  transition: all 0.12s ease !important;
 }
 
 button[data-testid="interaction-continue-button"]:active,

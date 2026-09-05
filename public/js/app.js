@@ -1733,32 +1733,35 @@ function buildSnapshotStyles(cssText) {
     img[src^="/c:"], img[src^="/C:"], img[src*="AppData"] {
       display: none !important;
     }
+    /* Disable layout sliding animations inside question radiogroups */
+    div[role="radiogroup"],
+    div[role="radiogroup"] > div,
+    label[for^="ask-opt-"] {
+      animation: none !important;
+    }
     label[for^="ask-opt-"] {
       position: relative !important;
       display: flex !important;
       align-items: center !important;
-      gap: 10px !important;
-      padding: 10px 14px !important;
-      margin: 6px 0 !important;
-      background: var(--bg-card, rgba(255, 255, 255, 0.05)) !important;
+      gap: 12px !important;
+      padding: 12px 14px !important;
+      margin: 8px 0 !important;
+      background: var(--bg-card, rgba(255, 255, 255, 0.04)) !important;
       border: 1.5px solid var(--border, rgba(148, 163, 184, 0.22)) !important;
       border-radius: 12px !important;
       cursor: pointer !important;
       user-select: none !important;
       -webkit-user-select: none !important;
       -webkit-tap-highlight-color: transparent !important;
-      transition: all 0.16s ease !important;
+      transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, transform 0.08s ease !important;
       box-sizing: border-box !important;
     }
     label[for^="ask-opt-"]:hover {
-      background: var(--bg-card-hover, rgba(255, 255, 255, 0.09)) !important;
+      background: var(--bg-card-hover, rgba(255, 255, 255, 0.08)) !important;
       border-color: ${accent} !important;
     }
-    label[for^="ask-opt-"]:active,
-    label[for^="ask-opt-"].omni-tap-active {
-      transform: scale(0.975) !important;
-      background: ${accentSoft} !important;
-      border-color: ${accent} !important;
+    label[for^="ask-opt-"]:active {
+      transform: scale(0.98) !important;
     }
     label[for^="ask-opt-"].omni-selected,
     label[for^="ask-opt-"][data-checked="true"],
@@ -1774,14 +1777,21 @@ function buildSnapshotStyles(cssText) {
       font-weight: 600 !important;
     }
     label[for^="ask-opt-"] div.shrink-0 {
-      transition: all 0.16s ease !important;
+      background: rgba(148, 163, 184, 0.15) !important;
+      color: var(--text-muted, #94a3b8) !important;
+      border: 1px solid rgba(148, 163, 184, 0.25) !important;
+      border-radius: 6px !important;
+      font-weight: 600 !important;
+      transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, color 0.12s ease !important;
     }
     label[for^="ask-opt-"].omni-selected div.shrink-0,
     label[for^="ask-opt-"][data-checked="true"] div.shrink-0,
     label[for^="ask-opt-"]:has(input:checked) div.shrink-0 {
       background: ${accent} !important;
       border-color: ${accent} !important;
-      box-shadow: 0 0 10px rgba(29, 155, 240, 0.5) !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      box-shadow: 0 0 8px ${accent} !important;
     }
     label[for^="ask-opt-"].omni-selected div.shrink-0 span,
     label[for^="ask-opt-"][data-checked="true"] div.shrink-0 span,
@@ -1802,7 +1812,7 @@ function buildSnapshotStyles(cssText) {
       border: none !important;
       box-shadow: 0 4px 14px rgba(29, 155, 240, 0.35) !important;
       cursor: pointer !important;
-      transition: all 0.15s ease !important;
+      transition: all 0.12s ease !important;
     }
     button[data-testid="interaction-continue-button"]:active,
     button[data-testid="interaction-continue-button"].omni-submitting {
@@ -1820,7 +1830,7 @@ function buildSnapshotStyles(cssText) {
       margin-top: 8px !important;
       border: 1px solid var(--border, rgba(148, 163, 184, 0.22)) !important;
       cursor: pointer !important;
-      transition: all 0.15s ease !important;
+      transition: all 0.12s ease !important;
     }
     button[data-testid="interaction-skip-button"]:active {
       transform: scale(0.96) !important;
@@ -1914,6 +1924,33 @@ async function loadSnapshot() {
       chatContent,
       `<div id="chatContent" class="chat-content snapshot-shell">${payload.html}</div>`
     );
+
+    // Suppress stale snapshot rubber-banding while the user recently selected an option
+    if (activeUserOptionKey && Date.now() - activeUserOptionTime < 2000) {
+      const chosenLabel = chatContent.querySelector(`label[for="${CSS.escape(activeUserOptionKey)}"]`);
+      if (chosenLabel) {
+        const groupContainer = chosenLabel.closest('[role="radiogroup"]') || chosenLabel.parentElement?.parentElement || chatContent;
+        groupContainer.querySelectorAll('label[for^="ask-opt-"]').forEach((l) => {
+          if (l === chosenLabel) {
+            l.classList.add('omni-selected');
+            l.setAttribute('data-checked', 'true');
+            const inp = l.querySelector('input') || (l.getAttribute('for') ? chatContent.querySelector(`#${CSS.escape(l.getAttribute('for'))}`) : null);
+            if (inp) {
+              inp.checked = true;
+              inp.setAttribute('checked', '');
+            }
+          } else {
+            l.classList.remove('omni-selected');
+            l.removeAttribute('data-checked');
+            const inp = l.querySelector('input') || (l.getAttribute('for') ? chatContent.querySelector(`#${CSS.escape(l.getAttribute('for'))}`) : null);
+            if (inp) {
+              inp.checked = false;
+              inp.removeAttribute('checked');
+            }
+          }
+        });
+      }
+    }
     chatContent.querySelectorAll('details').forEach((details) =>
       details.setAttribute('open', '')
     );
@@ -3111,15 +3148,22 @@ chatContainer.addEventListener('scroll', () => {
   }, 5000);
 });
 
+let activeUserOptionKey = null;
+let activeUserOptionTime = 0;
+let optionSnapshotDebounce1 = null;
+let optionSnapshotDebounce2 = null;
+
 chatContainer.addEventListener('click', async (event) => {
   if (event.target.closest('.mobile-copy-btn')) return;
+
+  // Ignore synthetic click on input if it bubbled from an option label click
+  if (event.target.tagName === 'INPUT' && event.target.closest('label[for^="ask-opt-"]')) {
+    return;
+  }
 
   // Instant tactile tap & selection feedback for question options
   const optionLabel = event.target.closest('label[for^="ask-opt-"]') || event.target.closest('label');
   if (optionLabel) {
-    optionLabel.classList.add('omni-tap-active');
-    setTimeout(() => optionLabel.classList.remove('omni-tap-active'), 250);
-
     const forAttr = optionLabel.getAttribute('for') || '';
     const isMultiSelect = optionLabel.closest('[role="radiogroup"]') === null &&
       (optionLabel.closest('.no-focus-ring')?.innerText?.includes('Multi-select') ||
@@ -3145,24 +3189,30 @@ chatContainer.addEventListener('click', async (event) => {
         }
       }
     } else {
-      // Single-select radio: update all labels in this group
+      // Single-select radio: update selection key and lock against stale snapshot overrides
+      activeUserOptionKey = forAttr;
+      activeUserOptionTime = Date.now();
+
       const groupContainer = optionLabel.closest('[role="radiogroup"]') || optionLabel.parentElement?.parentElement || chatContainer;
       groupContainer.querySelectorAll('label[for^="ask-opt-"]').forEach((l) => {
-        l.classList.remove('omni-selected');
-        l.removeAttribute('data-checked');
-        const inp = l.querySelector('input') || (l.getAttribute('for') ? document.getElementById(l.getAttribute('for')) : null);
-        if (inp) {
-          inp.checked = false;
-          inp.removeAttribute('checked');
+        if (l === optionLabel) {
+          l.classList.add('omni-selected');
+          l.setAttribute('data-checked', 'true');
+          const inp = l.querySelector('input') || (l.getAttribute('for') ? document.getElementById(l.getAttribute('for')) : null);
+          if (inp) {
+            inp.checked = true;
+            inp.setAttribute('checked', '');
+          }
+        } else {
+          l.classList.remove('omni-selected');
+          l.removeAttribute('data-checked');
+          const inp = l.querySelector('input') || (l.getAttribute('for') ? document.getElementById(l.getAttribute('for')) : null);
+          if (inp) {
+            inp.checked = false;
+            inp.removeAttribute('checked');
+          }
         }
       });
-      optionLabel.classList.add('omni-selected');
-      optionLabel.setAttribute('data-checked', 'true');
-      const input = optionLabel.querySelector('input') || (forAttr ? document.getElementById(forAttr) : null);
-      if (input) {
-        input.checked = true;
-        input.setAttribute('checked', '');
-      }
     }
   }
 
@@ -3196,8 +3246,12 @@ chatContainer.addEventListener('click', async (event) => {
         textContent: text.split('\n')[0].trim(),
       }),
     });
-    setTimeout(loadSnapshot, 250);
-    setTimeout(loadSnapshot, 600);
+
+    // Debounce subsequent snapshot fetches so rapid clicks do not trigger stale snapshot rubber-banding
+    clearTimeout(optionSnapshotDebounce1);
+    clearTimeout(optionSnapshotDebounce2);
+    optionSnapshotDebounce1 = setTimeout(loadSnapshot, 300);
+    optionSnapshotDebounce2 = setTimeout(loadSnapshot, 800);
   } catch (_) {}
 });
 document.querySelectorAll('.workspace-tab').forEach((button) => {
