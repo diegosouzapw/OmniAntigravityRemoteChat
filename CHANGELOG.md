@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-05
+
+### Added
+- 🪟 **Multi-Window Auto-Targeting on Conversation Selection** — When selecting a past conversation belonging to an already-open workspace in another Antigravity IDE window, the bridge automatically switches active CDP target to that window without modal friction.
+- ⚡ **Synchronous Snapshot Delivery on Chat Switch** — `/select-chat` immediately invalidates cached DOM snapshots, captures a fresh snapshot from the target window, broadcasts it across WebSockets, and returns the snapshot in the HTTP response for zero-latency client rendering.
+
+### Fixed
+- 🐛 **Cross-Workspace Confirmation Prompt Auto-Confirm** — Auto-detects and confirms VS Code `.quick-input-widget` modal dialogs (*"Open in current window"*) when loading conversations across workspaces, resolving desktop lockup.
+- 🐛 **CDP Reconnection Hang Resolution** — Added `ws.on('close')` event handling in `connectCDP()` to immediately reject in-flight requests and clear timeouts, preventing 30-second delays during window switching.
+- 🐛 **Mobile PWA Stale Cache Invalidation** — Bumped Service Worker shell cache to `v10` and added version cache-busting to `app.js` script tag in `index.html` to guarantee instant mobile client updates.
+
 ## [1.4.0] - 2026-09-05
 
 ### Added
