@@ -150,3 +150,117 @@ body.compact-mode .action-card-slot {
   max-height: 280px;
 }
 
+/* ==========================================================================
+   Interactive Question Prompts (Mirrored Antigravity Ask Question & Grill-Me)
+   ========================================================================== */
+
+label[for^="ask-opt-"] {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 10px 14px !important;
+  margin: 6px 0 !important;
+  background: var(--bg-card, rgba(255, 255, 255, 0.05)) !important;
+  border: 1.5px solid var(--border, rgba(148, 163, 184, 0.22)) !important;
+  border-radius: var(--radius-md, 12px) !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  transition: all 0.16s ease !important;
+  box-sizing: border-box !important;
+}
+
+label[for^="ask-opt-"]:hover {
+  background: var(--bg-card-hover, rgba(255, 255, 255, 0.09)) !important;
+  border-color: var(--accent, #1d9bf0) !important;
+}
+
+/* Instant tactile touch feedback */
+label[for^="ask-opt-"]:active,
+label[for^="ask-opt-"].omni-tap-active {
+  transform: scale(0.975) !important;
+  background: var(--accent-soft, rgba(29, 155, 240, 0.16)) !important;
+  border-color: var(--accent, #1d9bf0) !important;
+}
+
+/* Selected state: high-contrast border, soft glow, and accent background */
+label[for^="ask-opt-"].omni-selected,
+label[for^="ask-opt-"][data-checked="true"],
+label[for^="ask-opt-"]:has(input:checked) {
+  background: var(--accent-soft, rgba(29, 155, 240, 0.16)) !important;
+  border-color: var(--accent, #1d9bf0) !important;
+  box-shadow: 0 0 0 1.5px var(--accent, #1d9bf0), 0 4px 16px rgba(29, 155, 240, 0.25) !important;
+}
+
+label[for^="ask-opt-"].omni-selected > span,
+label[for^="ask-opt-"][data-checked="true"] > span,
+label[for^="ask-opt-"]:has(input:checked) > span {
+  color: var(--text-main, #ffffff) !important;
+  font-weight: 600 !important;
+}
+
+/* Highlight the option ID badge (e.g. 1, 2, A1, A2) */
+label[for^="ask-opt-"] div.shrink-0 {
+  transition: all 0.16s ease !important;
+}
+
+label[for^="ask-opt-"].omni-selected div.shrink-0,
+label[for^="ask-opt-"][data-checked="true"] div.shrink-0,
+label[for^="ask-opt-"]:has(input:checked) div.shrink-0 {
+  background: var(--accent, #1d9bf0) !important;
+  border-color: var(--accent, #1d9bf0) !important;
+  box-shadow: 0 0 10px rgba(29, 155, 240, 0.5) !important;
+}
+
+label[for^="ask-opt-"].omni-selected div.shrink-0 span,
+label[for^="ask-opt-"][data-checked="true"] div.shrink-0 span,
+label[for^="ask-opt-"]:has(input:checked) div.shrink-0 span {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+/* Interactive Action Buttons (Continue, Submit, Skip) */
+button[data-testid="interaction-continue-button"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: var(--accent, #1d9bf0) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border-radius: var(--radius-md, 10px) !important;
+  padding: 10px 20px !important;
+  margin-top: 8px !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(29, 155, 240, 0.35) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+button[data-testid="interaction-continue-button"]:active,
+button[data-testid="interaction-continue-button"].omni-submitting {
+  transform: scale(0.96) !important;
+  filter: brightness(0.9) !important;
+}
+
+button[data-testid="interaction-skip-button"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+  color: var(--text-muted, #94a3b8) !important;
+  border-radius: var(--radius-md, 10px) !important;
+  padding: 10px 16px !important;
+  margin-top: 8px !important;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.22)) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+button[data-testid="interaction-skip-button"]:active {
+  transform: scale(0.96) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+

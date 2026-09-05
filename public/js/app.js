@@ -1631,6 +1631,8 @@ function buildSnapshotStyles(cssText) {
   const surface = theme.getPropertyValue('--snapshot-bg').trim();
   const card = theme.getPropertyValue('--snapshot-card').trim();
   const link = theme.getPropertyValue('--snapshot-link').trim();
+  const accent = theme.getPropertyValue('--accent').trim() || '#1d9bf0';
+  const accentSoft = theme.getPropertyValue('--accent-soft').trim() || 'rgba(29, 155, 240, 0.16)';
   return `
     ${cssText}
     #conversation, #chat, #cascade {
@@ -1730,6 +1732,99 @@ function buildSnapshotStyles(cssText) {
     }
     img[src^="/c:"], img[src^="/C:"], img[src*="AppData"] {
       display: none !important;
+    }
+    label[for^="ask-opt-"] {
+      position: relative !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+      padding: 10px 14px !important;
+      margin: 6px 0 !important;
+      background: var(--bg-card, rgba(255, 255, 255, 0.05)) !important;
+      border: 1.5px solid var(--border, rgba(148, 163, 184, 0.22)) !important;
+      border-radius: 12px !important;
+      cursor: pointer !important;
+      user-select: none !important;
+      -webkit-user-select: none !important;
+      -webkit-tap-highlight-color: transparent !important;
+      transition: all 0.16s ease !important;
+      box-sizing: border-box !important;
+    }
+    label[for^="ask-opt-"]:hover {
+      background: var(--bg-card-hover, rgba(255, 255, 255, 0.09)) !important;
+      border-color: ${accent} !important;
+    }
+    label[for^="ask-opt-"]:active,
+    label[for^="ask-opt-"].omni-tap-active {
+      transform: scale(0.975) !important;
+      background: ${accentSoft} !important;
+      border-color: ${accent} !important;
+    }
+    label[for^="ask-opt-"].omni-selected,
+    label[for^="ask-opt-"][data-checked="true"],
+    label[for^="ask-opt-"]:has(input:checked) {
+      background: ${accentSoft} !important;
+      border-color: ${accent} !important;
+      box-shadow: 0 0 0 1.5px ${accent}, 0 4px 16px rgba(29, 155, 240, 0.25) !important;
+    }
+    label[for^="ask-opt-"].omni-selected > span,
+    label[for^="ask-opt-"][data-checked="true"] > span,
+    label[for^="ask-opt-"]:has(input:checked) > span {
+      color: ${text} !important;
+      font-weight: 600 !important;
+    }
+    label[for^="ask-opt-"] div.shrink-0 {
+      transition: all 0.16s ease !important;
+    }
+    label[for^="ask-opt-"].omni-selected div.shrink-0,
+    label[for^="ask-opt-"][data-checked="true"] div.shrink-0,
+    label[for^="ask-opt-"]:has(input:checked) div.shrink-0 {
+      background: ${accent} !important;
+      border-color: ${accent} !important;
+      box-shadow: 0 0 10px rgba(29, 155, 240, 0.5) !important;
+    }
+    label[for^="ask-opt-"].omni-selected div.shrink-0 span,
+    label[for^="ask-opt-"][data-checked="true"] div.shrink-0 span,
+    label[for^="ask-opt-"]:has(input:checked) div.shrink-0 span {
+      color: #ffffff !important;
+      font-weight: 700 !important;
+    }
+    button[data-testid="interaction-continue-button"] {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background: ${accent} !important;
+      color: #ffffff !important;
+      font-weight: 600 !important;
+      border-radius: 10px !important;
+      padding: 10px 20px !important;
+      margin-top: 8px !important;
+      border: none !important;
+      box-shadow: 0 4px 14px rgba(29, 155, 240, 0.35) !important;
+      cursor: pointer !important;
+      transition: all 0.15s ease !important;
+    }
+    button[data-testid="interaction-continue-button"]:active,
+    button[data-testid="interaction-continue-button"].omni-submitting {
+      transform: scale(0.96) !important;
+      filter: brightness(0.9) !important;
+    }
+    button[data-testid="interaction-skip-button"] {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background: transparent !important;
+      color: var(--text-muted, #94a3b8) !important;
+      border-radius: 10px !important;
+      padding: 10px 16px !important;
+      margin-top: 8px !important;
+      border: 1px solid var(--border, rgba(148, 163, 184, 0.22)) !important;
+      cursor: pointer !important;
+      transition: all 0.15s ease !important;
+    }
+    button[data-testid="interaction-skip-button"]:active {
+      transform: scale(0.96) !important;
+      background: rgba(255, 255, 255, 0.06) !important;
     }
   `;
 }
@@ -3018,6 +3113,64 @@ chatContainer.addEventListener('scroll', () => {
 
 chatContainer.addEventListener('click', async (event) => {
   if (event.target.closest('.mobile-copy-btn')) return;
+
+  // Instant tactile tap & selection feedback for question options
+  const optionLabel = event.target.closest('label[for^="ask-opt-"]') || event.target.closest('label');
+  if (optionLabel) {
+    optionLabel.classList.add('omni-tap-active');
+    setTimeout(() => optionLabel.classList.remove('omni-tap-active'), 250);
+
+    const forAttr = optionLabel.getAttribute('for') || '';
+    const isMultiSelect = optionLabel.closest('[role="radiogroup"]') === null &&
+      (optionLabel.closest('.no-focus-ring')?.innerText?.includes('Multi-select') ||
+       optionLabel.querySelector('input[type="checkbox"]') !== null);
+
+    if (isMultiSelect) {
+      const isSelected = optionLabel.classList.contains('omni-selected') || optionLabel.getAttribute('data-checked') === 'true';
+      if (isSelected) {
+        optionLabel.classList.remove('omni-selected');
+        optionLabel.removeAttribute('data-checked');
+        const input = optionLabel.querySelector('input') || (forAttr ? document.getElementById(forAttr) : null);
+        if (input) {
+          input.checked = false;
+          input.removeAttribute('checked');
+        }
+      } else {
+        optionLabel.classList.add('omni-selected');
+        optionLabel.setAttribute('data-checked', 'true');
+        const input = optionLabel.querySelector('input') || (forAttr ? document.getElementById(forAttr) : null);
+        if (input) {
+          input.checked = true;
+          input.setAttribute('checked', '');
+        }
+      }
+    } else {
+      // Single-select radio: update all labels in this group
+      const groupContainer = optionLabel.closest('[role="radiogroup"]') || optionLabel.parentElement?.parentElement || chatContainer;
+      groupContainer.querySelectorAll('label[for^="ask-opt-"]').forEach((l) => {
+        l.classList.remove('omni-selected');
+        l.removeAttribute('data-checked');
+        const inp = l.querySelector('input') || (l.getAttribute('for') ? document.getElementById(l.getAttribute('for')) : null);
+        if (inp) {
+          inp.checked = false;
+          inp.removeAttribute('checked');
+        }
+      });
+      optionLabel.classList.add('omni-selected');
+      optionLabel.setAttribute('data-checked', 'true');
+      const input = optionLabel.querySelector('input') || (forAttr ? document.getElementById(forAttr) : null);
+      if (input) {
+        input.checked = true;
+        input.setAttribute('checked', '');
+      }
+    }
+  }
+
+  // Instant feedback on button submission
+  const submitBtn = event.target.closest('button[data-testid="interaction-continue-button"]');
+  if (submitBtn) {
+    submitBtn.classList.add('omni-submitting');
+  }
 
   const annotatedTarget = event.target.closest('[data-omni-idx]');
   const interactionTarget = event.target.closest('label, input, button, [role="button"], [role="radio"], [role="checkbox"], [data-testid^="interaction-"]');

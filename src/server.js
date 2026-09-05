@@ -742,6 +742,55 @@ async function captureSnapshot(cdp) {
         
         // Clone cascade to modify it without affecting the original
         const clone = cascade.cloneNode(true);
+
+        // Synchronize live interactive selection states (radio/checkboxes/options) into clone
+        try {
+            const origInputs = cascade.querySelectorAll('input[type="radio"], input[type="checkbox"]');
+            origInputs.forEach(orig => {
+                const isChecked = !!orig.checked;
+                let targetInput = null;
+                if (orig.id) {
+                    try { targetInput = clone.querySelector('#' + CSS.escape(orig.id)); } catch (_) {}
+                }
+                if (!targetInput && orig.name && orig.value) {
+                    try { targetInput = clone.querySelector('input[name="' + CSS.escape(orig.name) + '"][value="' + CSS.escape(orig.value) + '"]'); } catch (_) {}
+                }
+                if (targetInput) {
+                    if (isChecked) {
+                        targetInput.setAttribute('checked', '');
+                        const targetLabel = targetInput.closest('label') || (targetInput.id ? clone.querySelector('label[for="' + CSS.escape(targetInput.id) + '"]') : null);
+                        if (targetLabel) {
+                            targetLabel.setAttribute('data-checked', 'true');
+                            targetLabel.classList.add('omni-selected');
+                        }
+                    } else {
+                        targetInput.removeAttribute('checked');
+                        const targetLabel = targetInput.closest('label') || (targetInput.id ? clone.querySelector('label[for="' + CSS.escape(targetInput.id) + '"]') : null);
+                        if (targetLabel) {
+                            targetLabel.removeAttribute('data-checked');
+                            targetLabel.classList.remove('omni-selected');
+                        }
+                    }
+                }
+            });
+
+            // Also check Antigravity's native label selection classes (bg-secondary vs hover:bg-secondary)
+            const origLabels = cascade.querySelectorAll('label[for^="ask-opt-"]');
+            origLabels.forEach(origLabel => {
+                const forId = origLabel.getAttribute('for');
+                if (!forId) return;
+                let targetLabel = null;
+                try { targetLabel = clone.querySelector('label[for="' + CSS.escape(forId) + '"]'); } catch (_) {}
+                if (!targetLabel) return;
+                const isSelectedClass = origLabel.classList.contains('bg-secondary') && !origLabel.classList.contains('hover:bg-secondary');
+                if (isSelectedClass) {
+                    targetLabel.setAttribute('data-checked', 'true');
+                    targetLabel.classList.add('omni-selected');
+                    targetLabel.querySelector('input')?.setAttribute('checked', '');
+                }
+            });
+        } catch (_) {}
+
         const wrapper = document.createElement('div');
         wrapper.appendChild(clone);
         
@@ -849,7 +898,7 @@ async function captureSnapshot(cdp) {
             });
 
             const textGroups = new Map();
-            Array.from(wrapper.querySelectorAll('button, [role="button"], a, summary, span, div, p')).forEach(el => {
+            Array.from(wrapper.querySelectorAll('button, [role="button"], a, summary, label, input, span, div, p')).forEach(el => {
                 try {
                     if (!isInteractiveCandidate(el)) return;
                     const text = normalizeText(el.textContent || el.innerText || '');

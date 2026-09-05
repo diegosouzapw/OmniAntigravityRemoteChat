@@ -1358,11 +1358,17 @@ body.compact-mode .fab svg {
   border-color: var(--accent);
 }
 
+.action-option-pill:active {
+  transform: scale(0.98);
+}
+
 .action-option-pill.selected {
-  background: var(--accent-soft, rgba(29, 155, 240, 0.12));
+  background: var(--accent-soft, rgba(29, 155, 240, 0.16));
   border-color: var(--accent);
   color: var(--accent);
   font-weight: 600;
+  box-shadow: 0 0 0 1.5px var(--accent), 0 4px 14px rgba(29, 155, 240, 0.22);
+  transform: translateY(-1px);
 }
 
 .action-option-indicator {
