@@ -59,7 +59,8 @@
     },
     "author": "Diego Souza <diegosouzapw@gmail.com> (https://github.com/diegosouzapw)",
     "contributors": [
-        "Krishna Kanth B (https://github.com/krishnakanthb13)"
+        "Krishna Kanth B (https://github.com/krishnakanthb13)",
+        "Kelvin Tan (https://github.com/kelverssg)"
     ],
     "license": "GPL-3.0-only",
     "engines": {

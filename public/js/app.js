@@ -3020,28 +3020,31 @@ chatContainer.addEventListener('click', async (event) => {
   if (event.target.closest('.mobile-copy-btn')) return;
 
   const annotatedTarget = event.target.closest('[data-omni-idx]');
-  const target = annotatedTarget || event.target.closest('div, span, p, summary, button, details');
+  const interactionTarget = event.target.closest('label, input, button, [role="button"], [role="radio"], [role="checkbox"], [data-testid^="interaction-"]');
+  const target = annotatedTarget || interactionTarget || event.target.closest('div, span, p, summary, details');
   if (!target) return;
 
+  const isInteractionEl = !!interactionTarget;
   const text = (target.getAttribute?.('data-omni-text') || target.innerText || '').trim();
-  if (!annotatedTarget && (!/Thought|Thinking/i.test(text) || text.length > 500)) return;
+  if (!annotatedTarget && !isInteractionEl && (!/Thought|Thinking/i.test(text) || text.length > 500)) return;
 
   const omniIndexValue = target.getAttribute?.('data-omni-idx');
   const omniIndex = omniIndexValue !== null ? Number.parseInt(omniIndexValue, 10) : null;
 
   try {
+    const clickTarget = interactionTarget || target;
     await fetchWithAuth('/remote-click', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        selector: target.tagName.toLowerCase(),
+        selector: clickTarget.tagName.toLowerCase(),
         index: Number.isFinite(omniIndex) ? omniIndex : 0,
         omniIndex: Number.isFinite(omniIndex) ? omniIndex : undefined,
         textContent: text.split('\n')[0].trim(),
       }),
     });
-    setTimeout(loadSnapshot, 450);
-    setTimeout(loadSnapshot, 1000);
+    setTimeout(loadSnapshot, 250);
+    setTimeout(loadSnapshot, 600);
   } catch (_) {}
 });
 document.querySelectorAll('.workspace-tab').forEach((button) => {

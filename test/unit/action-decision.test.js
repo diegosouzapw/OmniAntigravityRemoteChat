@@ -141,6 +141,42 @@ describe('Action & Decision System - Heuristics & Prompts', () => {
       const prompt = detectPendingPromptFromHtml(conversationalHtml);
       expect(prompt).toBeNull();
     });
+
+    it('detects an interactive question prompt with Continue and Skip buttons', () => {
+      const html = `
+        <div class="outline-none flex flex-col gap-2 no-focus-ring">
+          <div class="flex min-w-0 text-sm">Which architecture do you recommend?</div>
+          <button data-testid="interaction-skip-button">Skip</button>
+          <button data-testid="interaction-continue-button">Continue ↵</button>
+        </div>
+      `;
+      const prompt = detectPendingPromptFromHtml(html);
+      expect(prompt).not.toBeNull();
+      expect(prompt?.type).toBe('question');
+      expect(prompt?.title).toBe('Which architecture do you recommend?');
+      expect(prompt?.submitText).toBe('Continue');
+      expect(prompt?.skipText).toBe('Skip');
+    });
+
+    it('detects multi-question counter, checkboxes, and write-in in question prompts', () => {
+      const html = `
+        <div class="outline-none flex flex-col gap-2">
+          <span>1 of 3</span>
+          <div class="flex min-w-0 text-sm">Select applicable features</div>
+          <span class="bg-secondary">Multi-select</span>
+          <label for="ask-opt-0-__write_in__">Custom write-in</label>
+          <button data-testid="interaction-skip-button">Skip</button>
+          <button data-testid="interaction-continue-button">Submit ↵</button>
+        </div>
+      `;
+      const prompt = detectPendingPromptFromHtml(html);
+      expect(prompt).not.toBeNull();
+      expect(prompt?.type).toBe('question');
+      expect(prompt?.title).toContain('[1 of 3]');
+      expect(prompt?.isMultiSelect).toBe(true);
+      expect(prompt?.hasWriteIn).toBe(true);
+      expect(prompt?.submitText).toBe('Submit');
+    });
   });
 
   describe('Implementation Plan File Resolution', () => {

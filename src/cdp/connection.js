@@ -35,6 +35,18 @@ export async function discoverCDP() {
                 console.log('Found Jetski/Launchpad target:', jetski.title);
                 return { port, url: jetski.webSocketDebuggerUrl };
             }
+
+            // Priority 3: Revamped Gemini-based Antigravity (local HTTPS app — title changes per conversation)
+            // Credit: Kelvin Tan (@kelverssg)
+            const gemini = list.find(t =>
+                t.type === 'page' &&
+                t.webSocketDebuggerUrl &&
+                t.url?.match(/^https?:\/\/127\.0\.0\.1:\d+/)
+            );
+            if (gemini?.webSocketDebuggerUrl) {
+                console.log('Found Gemini Antigravity target:', gemini.title || gemini.url);
+                return { port, url: gemini.webSocketDebuggerUrl };
+            }
         } catch (e) {
             errors.push(`${port}: ${/** @type {Error} */(e).message}`);
         }
@@ -44,7 +56,7 @@ export async function discoverCDP() {
 
 /**
  * Discover ALL available CDP targets across all ports (multi-window).
- * Only includes real editor workbench windows.
+ * Only includes real editor workbench windows or Gemini Antigravity page targets.
  *
  * @returns {Promise<import('../state.js').CDPTarget[]>}
  */
@@ -58,7 +70,9 @@ export async function discoverAllCDP() {
             for (const t of list) {
                 if (!t.webSocketDebuggerUrl) continue;
 
-                const isWorkbench = t.url?.includes('workbench.html') && !t.url?.includes('jetski');
+                // Support classic VS Code workbench or Gemini-based Antigravity local app pages
+                const isGeminiPage = t.type === 'page' && t.url?.match(/^https?:\/\/127\.0\.0\.1:\d+/);
+                const isWorkbench = (t.url?.includes('workbench.html') && !t.url?.includes('jetski')) || isGeminiPage;
                 if (!isWorkbench) continue;
 
                 const titleLower = (t.title || '').toLowerCase();

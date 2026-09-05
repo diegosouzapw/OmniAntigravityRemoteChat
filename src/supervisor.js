@@ -165,6 +165,54 @@ export function detectPendingPromptFromHtml(html) {
         };
     }
 
+    // 3. Check for Interactive Question prompt (Submit/Continue + Skip buttons or Antigravity testids)
+    const hasContinueOrSubmit = /data-testid=["']interaction-continue-button["']/i.test(html) ||
+                                /<button[^>]*>[\s\S]*?(?:submit|continue)[\s\S]*?<\/button>/i.test(html) ||
+                                /<(?:div|span)[^>]*?(?:role=["']button["'])[^>]*>[\s\S]*?(?:submit|continue)[\s\S]*?<\/(?:div|span)>/i.test(html);
+    const hasSkip = /data-testid=["']interaction-skip-button["']/i.test(html) ||
+                    /<button[^>]*>[\s\S]*?skip[\s\S]*?<\/button>/i.test(html) ||
+                    /<(?:div|span)[^>]*?(?:role=["']button["'])[^>]*>[\s\S]*?skip[\s\S]*?<\/(?:div|span)>/i.test(html);
+
+    if (hasContinueOrSubmit && hasSkip) {
+        let questionTitle = 'Interactive Decision';
+        const titleMatch = html.match(/<div[^>]*class=["'][^"']*?text-sm[^"']*?["'][^>]*>([\s\S]*?)<\/div>/i) ||
+                           html.match(/<h\d[^>]*>([\s\S]*?)<\/h\d>/i) ||
+                           html.match(/<p[^>]*class=["'][^"']*?question[^"']*?["'][^>]*>([\s\S]*?)<\/p>/i);
+        if (titleMatch && titleMatch[1]) {
+            questionTitle = titleMatch[1].replace(/<[^>]+>/g, '').trim();
+        }
+
+        const counterMatch = html.match(/\b\d+\s+of\s+\d+\b/i);
+        if (counterMatch) {
+            questionTitle = `[${counterMatch[0]}] ${questionTitle}`;
+        }
+
+        const isMulti = /checkbox/i.test(html) || /multi-select/i.test(html);
+        const hasWriteIn = /__write_in__/i.test(html) || /<textarea/i.test(html);
+
+        const qHash = Math.abs(questionTitle.split('').reduce((a, b) => ((a << 5) + a) + b.charCodeAt(0), 5381)).toString(36);
+
+        const continueBtnMatch = html.match(/data-testid=["']interaction-continue-button["'][^>]*>([\s\S]*?)<\/button>/i) ||
+                                 html.match(/<button[^>]*>([\s\S]*?(?:submit|continue)[\s\S]*?)<\/button>/i);
+        let submitText = 'Submit';
+        if (continueBtnMatch && continueBtnMatch[1]) {
+            const raw = continueBtnMatch[1].replace(/<[^>]+>/g, '').replace(/[↵\r\n]/g, '').trim();
+            if (/continue/i.test(raw)) submitText = 'Continue';
+            else if (/submit/i.test(raw)) submitText = 'Submit';
+        }
+
+        return {
+            id: 'question-' + qHash,
+            type: 'question',
+            title: questionTitle,
+            isMultiSelect: isMulti,
+            options: [],
+            hasWriteIn: hasWriteIn,
+            submitText: submitText,
+            skipText: 'Skip'
+        };
+    }
+
     return null;
 }
 

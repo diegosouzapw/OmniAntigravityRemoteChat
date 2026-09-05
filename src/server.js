@@ -8,6 +8,7 @@
  */
 import './env.js';
 import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import {
@@ -696,11 +697,21 @@ async function captureSnapshot(cdp) {
         ];
         const normalizeText = (value) => (value || '').split('\\n')[0].replace(/\\s+/g, ' ').trim();
         const isInteractiveCandidate = (el) => {
+            if (typeof el.matches === 'function' && (
+                el.matches('label[for^="ask-opt-"], label, [data-testid^="interaction-"], [role="radio"], [role="checkbox"], input[type="radio"], input[type="checkbox"]')
+            )) {
+                return true;
+            }
+            if (typeof el.closest === 'function' && (
+                el.closest('label[for^="ask-opt-"], button[data-testid^="interaction-"]')
+            )) {
+                return true;
+            }
             const text = normalizeText(el.textContent || el.innerText || '');
             if (!text || text.length > 120) return false;
-            if (el.children.length > 0) return false;
             if (['BUTTON', 'A', 'SUMMARY'].includes(el.tagName)) return true;
             if (el.getAttribute('role') === 'button') return true;
+            if (el.children.length > 0) return false;
             return INTERACTIVE_TEXT_PATTERNS.some((pattern) => pattern.test(text));
         };
 
@@ -772,14 +783,23 @@ async function captureSnapshot(cdp) {
             interactionSelectors.forEach(selector => {
                 wrapper.querySelectorAll(selector).forEach(el => {
                     try {
+                        // Never remove an active interaction question or action prompt
+                        if (el.querySelector?.('[data-testid="interaction-continue-button"], [data-testid="interaction-skip-button"]') ||
+                            (typeof el.getAttribute === 'function' && el.getAttribute('data-testid')?.startsWith('interaction-'))) {
+                            return;
+                        }
+
                         // For the editor, we want to remove its interaction container
                         if (selector === '[contenteditable="true"]') {
                             const area = el.closest('.relative.flex.flex-col.gap-8') || 
                                          el.closest('.flex.grow.flex-col.justify-start.gap-8') ||
                                          el.closest('div[id^="interaction"]') ||
                                          el.parentElement?.parentElement;
-                            if (area && area !== wrapper && area !== clone) area.remove();
-                            else el.remove();
+                            if (area && !area.querySelector?.('[data-testid="interaction-continue-button"]') && area !== wrapper && area !== clone) {
+                                area.remove();
+                            } else {
+                                el.remove();
+                            }
                         } else {
                             el.remove();
                         }
@@ -984,19 +1004,37 @@ async function captureSnapshot(cdp) {
 
 /**
  * Inject a message into the Antigravity chat editor and submit it.
+ * Supports Lexical editor (Gemini-based Antigravity), DOM staging verification,
+ * and busy checking.
+ * Credit: Kelvin Tan (@kelverssg) for Gemini Lexical selectors, staging checks, and busy check.
+ *
  * @param {import('./state.js').CDPConnection} cdp
  * @param {string} text
- * @returns {Promise<{ok: boolean, method?: string, reason?: string, error?: string}>}
+ * @param {object} [options]
+ * @param {boolean} [options.checkBusy=false]
+ * @returns {Promise<{ok: boolean, method?: string, reason?: string, error?: string, domStatus?: string, queued?: boolean}>}
  */
-async function injectMessage(cdp, text) {
+export async function injectMessage(cdp, text, { checkBusy = false } = {}) {
     // Use JSON.stringify for robust escaping (handles ", \, newlines, backticks, unicode, etc.)
     const safeText = JSON.stringify(text);
 
     const EXPRESSION = `(async () => {
-        const editors = [...document.querySelectorAll('#conversation [contenteditable="true"], #chat [contenteditable="true"], #cascade [contenteditable="true"], [contenteditable="true"][data-lexical-editor="true"], [contenteditable="true"]')]
-            .filter(el => el.offsetParent !== null);
-        const editor = editors.at(-1);
-        if (!editor) return { ok:false, error:"editor_not_found" };
+        // Busy check — stop/cancel button visible (VS Code era + Gemini era)
+        // Credit: Kelvin Tan (@kelverssg)
+        const cancel = document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]')
+                    || document.querySelector('button[aria-label="Stop"]')
+                    || document.querySelector('button[aria-label="Cancel"]');
+        if (${checkBusy} && cancel && cancel.offsetParent !== null) {
+            return { ok: false, reason: "busy", domStatus: "editor-found" };
+        }
+
+        // Editor: Gemini Antigravity (Lexical) → VS Code fallback
+        // Credit: Kelvin Tan (@kelverssg)
+        const editor = document.querySelector('[data-lexical-editor="true"][contenteditable="true"]')
+                    || document.querySelector('[aria-label="Message input"]')
+                    || [...document.querySelectorAll('#conversation [contenteditable="true"], #chat [contenteditable="true"], #cascade [contenteditable="true"], [contenteditable="true"][data-lexical-editor="true"], [contenteditable="true"]')]
+                        .filter(el => el.offsetParent !== null).at(-1);
+        if (!editor) return { ok: false, error: "editor_not_found", domStatus: "attempted" };
 
         const textToInsert = ${safeText};
 
@@ -1008,14 +1046,38 @@ async function injectMessage(cdp, text) {
         try { inserted = !!document.execCommand?.("insertText", false, textToInsert); } catch {}
         if (!inserted) {
             editor.textContent = textToInsert;
-            editor.dispatchEvent(new InputEvent("beforeinput", { bubbles:true, inputType:"insertText", data: textToInsert }));
-            editor.dispatchEvent(new InputEvent("input", { bubbles:true, inputType:"insertText", data: textToInsert }));
+            editor.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, inputType: "insertText", data: textToInsert, composed: true }));
+            editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: textToInsert, composed: true }));
         }
 
         // Wait for Lexical / Preact to register input state
-        await new Promise(r => setTimeout(r, 80));
+        await new Promise(r => setTimeout(r, 120));
 
+        // Staging check (Lexical input boundary verification)
+        // Credit: Kelvin Tan (@kelverssg)
+        const editorText = editor.innerText || editor.textContent || "";
+        const normalizeForStaging = value => value.replace(/[\s\\\x60]/g, '');
+        const actual = normalizeForStaging(editorText);
+        const expected = normalizeForStaging(textToInsert);
+        const minExpected = Math.floor(expected.length * 0.85);
+        const head = expected.slice(0, Math.min(80, expected.length));
+        const tail = expected.slice(Math.max(0, expected.length - 80));
+        const staged = expected.length === 0
+            || actual.includes(expected)
+            || (actual.length >= minExpected && actual.includes(head) && actual.includes(tail));
+        if (!staged) {
+            return { ok: false, error: "staging_failed", domStatus: "editor_found_unverified" };
+        }
 
+        // Priority 1: Gemini Antigravity "Send message" button inside side panel
+        // Credit: Kelvin Tan (@kelverssg)
+        const box = document.getElementById('antigravity.agentSidePanelInputBox');
+        const geminiSendBtn = (box ? [...box.querySelectorAll('button')] : [...document.querySelectorAll('button')])
+            .find(b => b.getAttribute('aria-label') === 'Send message');
+        if (geminiSendBtn && !geminiSendBtn.disabled && (geminiSendBtn.offsetParent !== null || geminiSendBtn.getClientRects().length > 0)) {
+            geminiSendBtn.click();
+            return { ok: true, domStatus: "verified-present", method: "click_send" };
+        }
 
         // Priority 2: Standard DOM send/queue button
         const submit = document.querySelector(
@@ -1039,16 +1101,20 @@ async function injectMessage(cdp, text) {
                 document.execCommand?.("selectAll", false, null);
                 document.execCommand?.("delete", false, null);
             } catch (_) {}
-            return { ok: true, method: "click_submit" };
+            return { ok: true, domStatus: "verified-present", method: "click_submit" };
         }
 
         // Priority 3: Trigger Enter key (submits when idle, queues when agent is working)
-        const isCancelVisible = !!document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]');
-        editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles:true, cancelable:true, key:"Enter", code:"Enter", keyCode:13, which:13 }));
-        editor.dispatchEvent(new KeyboardEvent("keypress", { bubbles:true, cancelable:true, key:"Enter", code:"Enter", keyCode:13, which:13 }));
-        editor.dispatchEvent(new KeyboardEvent("keyup", { bubbles:true, cancelable:true, key:"Enter", code:"Enter", keyCode:13, which:13 }));
+        const isCancelVisible = !!(
+            document.querySelector('[data-tooltip-id="input-send-button-cancel-tooltip"]') ||
+            document.querySelector('button[aria-label="Stop"]') ||
+            document.querySelector('button[aria-label="Cancel"]')
+        );
+        editor.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter", code: "Enter", keyCode: 13, which: 13 }));
+        editor.dispatchEvent(new KeyboardEvent("keypress", { bubbles: true, cancelable: true, key: "Enter", code: "Enter", keyCode: 13, which: 13 }));
+        editor.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, cancelable: true, key: "Enter", code: "Enter", keyCode: 13, which: 13 }));
         
-        return { ok: true, method: "enter_keypress", queued: isCancelVisible };
+        return { ok: true, domStatus: "verified-present", method: "enter_keypress", queued: isCancelVisible };
     })()`;
 
     // Target the main (default) execution context first and exclusively for DOM submissions
@@ -1059,7 +1125,8 @@ async function injectMessage(cdp, text) {
                 expression: EXPRESSION,
                 returnByValue: true,
                 awaitPromise: true,
-                contextId: defaultCtx.id
+                contextId: defaultCtx.id,
+                timeout: 5000
             });
 
             if (result.result && result.result.value) {
@@ -1092,7 +1159,80 @@ async function injectMessage(cdp, text) {
         }
     }
 
-    return { ok: false, reason: "no_context" };
+    // Fallback: evaluate in remaining execution contexts
+    for (const ctx of (cdp.contexts || [])) {
+        if (ctx.id === defaultCtx?.id) continue;
+        try {
+            const result = await cdp.call("Runtime.evaluate", {
+                expression: EXPRESSION,
+                returnByValue: true,
+                awaitPromise: true,
+                contextId: ctx.id,
+                timeout: 5000
+            });
+            if (result.result?.value) return result.result.value;
+        } catch {}
+    }
+
+    return { ok: false, reason: "no_context", domStatus: "attempted" };
+}
+
+/**
+ * Method 2: Scan all open tabs across configured CDP ports to find and inject into active chat.
+ * Credit: Kelvin Tan (@kelverssg)
+ *
+ * @param {string} text
+ * @param {object} [options]
+ * @returns {Promise<{ok: boolean, method?: string, reason?: string, error?: string, tab?: string, method2?: boolean, domStatus?: string}>}
+ */
+export async function injectMessageAnyTab(text, options = {}) {
+    let lastResult = { ok: false, error: 'editor_not_found_all_tabs', domStatus: 'attempted' };
+    for (const port of PORTS) {
+        let list;
+        try { list = await getJson(`http://127.0.0.1:${port}/json/list`); } catch { continue; }
+        for (const tab of list) {
+            if (!tab.webSocketDebuggerUrl) continue;
+            let conn;
+            try { conn = await connectCDP(tab.webSocketDebuggerUrl); } catch { continue; }
+            try {
+                const result = await injectMessage(conn, text, options);
+                conn.ws.close();
+                lastResult = { ...result, tab: tab.title || tab.id, method2: true };
+                if (result.ok !== false) return lastResult;
+            } catch {
+                conn.ws.close();
+            }
+        }
+    }
+    return lastResult;
+}
+
+// ── Concurrency Serialization & Deduplication ─────────────────────
+// Credit: Kelvin Tan (@kelverssg)
+// Serializes /send requests through an atomic promise chain to prevent
+// concurrent requests from destructively interleaving in the shared DOM editor.
+// Also provides 120s duplicate suppression and busy backoff.
+export const SEND_DEDUPE_MS = 120_000;
+export const SEND_BACKOFF_MS = [1000, 2000, 4000];
+export const recentSends = new Map(); // hash -> ts of last SUCCESSFUL injection
+
+export function sendHash(s) {
+    return crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
+}
+
+export function isRecentDuplicate(hash) {
+    const now = Date.now();
+    for (const [k, ts] of recentSends) {
+        if (now - ts > SEND_DEDUPE_MS) recentSends.delete(k);
+    }
+    return recentSends.has(hash);
+}
+
+let sendLock = Promise.resolve();
+export function withSendLock(fn) {
+    const run = sendLock.then(fn, fn);
+    sendLock = run.then(() => {}, () => {}); // a rejection must never poison the chain
+    return run.catch(err => ({ threw: err }));
 }
 
 /**
@@ -1290,8 +1430,8 @@ async function clickElement(cdp, { selector, index = 0, textContent, omniIndex }
             };
             const isClickable = (el) => {
                 if (!el) return false;
-                if (['BUTTON', 'A', 'SUMMARY'].includes(el.tagName)) return true;
-                if (el.getAttribute('role') === 'button') return true;
+                if (['BUTTON', 'A', 'SUMMARY', 'LABEL', 'INPUT'].includes(el.tagName)) return true;
+                if (['button', 'radio', 'checkbox'].includes(el.getAttribute('role'))) return true;
                 if (typeof el.onclick === 'function') return true;
                 const style = window.getComputedStyle(el);
                 return style.cursor === 'pointer';
@@ -1327,7 +1467,7 @@ async function clickElement(cdp, { selector, index = 0, textContent, omniIndex }
 
             if (elements.length === 0 && searchText) {
                 elements = Array.from(
-                    scope.querySelectorAll('button, [role="button"], a, summary, span, div, p')
+                    scope.querySelectorAll('label, input, button, [role="button"], a, summary, span, div, p')
                 )
                     .filter(isVisible)
                     .filter(matchesSearchText);
@@ -1345,6 +1485,22 @@ async function clickElement(cdp, { selector, index = 0, textContent, omniIndex }
             if (target) {
                 const clickable = findClickableTarget(target);
                 clickable.click();
+
+                // If this is a label or wraps an input, trigger change/click on input
+                try {
+                    const childInput = clickable.tagName === 'LABEL'
+                        ? (clickable.querySelector('input') || (clickable.getAttribute('for') ? document.getElementById(clickable.getAttribute('for')) : null))
+                        : (clickable.tagName === 'INPUT' ? clickable : null);
+                    if (childInput && childInput.type && ['radio', 'checkbox'].includes(childInput.type)) {
+                        if (childInput.type === 'radio') {
+                            childInput.checked = true;
+                        } else {
+                            childInput.checked = !childInput.checked;
+                        }
+                        childInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        childInput.dispatchEvent(new Event('click', { bubbles: true }));
+                    }
+                } catch (_) {}
 
                 try {
                     const rect = clickable.getBoundingClientRect();
@@ -2197,36 +2353,95 @@ export async function scanInteractivePrompts(cdp) {
                 return Math.abs(hash).toString(36);
             };
 
-            // 1. Interactive Question (inline question card in chat or dialog modal)
-            const questionCards = Array.from(document.querySelectorAll('.rounded-xl.border.border-border, [class*="rounded"][class*="border"]')).filter(c => {
-                const header = c.querySelector('span');
-                const hasQuestionHeader = header && /\d+\s+questions?/i.test(header.innerText);
-                if (!hasQuestionHeader) return false;
-                if (c.querySelector('[contenteditable="true"], [data-lexical-editor="true"]')) return false;
-                return !c.innerText.includes('(write-in)');
+            // 1. Interactive Question (Antigravity cascade step or modal dialog with Submit/Continue & Skip)
+            const submitBtn = allBtns.find(b => {
+                if (b.getAttribute('data-testid') === 'interaction-continue-button') return true;
+                const t = (b.innerText || b.getAttribute('aria-label') || '').trim();
+                return /^(submit|valider|send|confirm|continue)/i.test(t) || /(?:submit|valider|send|confirm|continue)\s*[↵\n]/i.test(t);
             });
-            const inlineCard = questionCards.length > 0 ? questionCards[questionCards.length - 1] : null;
+            const skipBtn = allBtns.find(b => {
+                if (b.getAttribute('data-testid') === 'interaction-skip-button') return true;
+                const t = (b.innerText || b.getAttribute('aria-label') || '').trim();
+                return /^(skip|passer|ignore)/i.test(t);
+            });
 
-            const dialog = document.querySelector('[role="dialog"], .monaco-dialog-box, .dialog-box') ||
-                           document.querySelector('[data-testid="question-widget"]');
-            
-            const questionContainer = inlineCard || (dialog && isVisible(dialog) ? dialog : null);
+            let questionContainer = null;
+            if (submitBtn && skipBtn) {
+                questionContainer = submitBtn.closest('[tabindex="-1"], [class*="no-focus-ring"], .outline-none.flex.flex-col, [role="dialog"], [class*="modal"], [class*="dialog"], [class*="card"]')
+                    || submitBtn.parentElement?.parentElement
+                    || submitBtn.parentElement?.parentElement?.parentElement
+                    || document.body;
+            } else {
+                const dialog = document.querySelector('[role="dialog"], .monaco-dialog-box, .dialog-box, [class*="dialog"], [class*="modal"]') ||
+                               document.querySelector('[data-testid="question-widget"]');
+                const questionCards = Array.from(document.querySelectorAll('.rounded-xl.border.border-border, [class*="rounded"][class*="border"]')).filter(c => {
+                    const hasQuestionHeader = /\d+\s+questions?/i.test(c.innerText);
+                    if (!hasQuestionHeader) return false;
+                    if (c.querySelector('[contenteditable="true"], [data-lexical-editor="true"]')) return false;
+                    return true;
+                });
+                const inlineCard = questionCards.length > 0 ? questionCards[questionCards.length - 1] : null;
+                questionContainer = (dialog && isVisible(dialog)) ? dialog : inlineCard;
+            }
 
-            if (questionContainer && !questionContainer.querySelector('[contenteditable="true"], [data-lexical-editor="true"]')) {
-                const headerEl = questionContainer.querySelector('h1, h2, h3, h4, p, .title, [class*="title"], [class*="question"]');
-                const optionEls = Array.from(questionContainer.querySelectorAll('[role="radio"], [role="checkbox"], input[type="radio"], input[type="checkbox"], label, .cursor-pointer'))
-                    .filter(el => {
-                        const t = (el.innerText || el.textContent || '').trim();
-                        if (!t) return false;
-                        if (/^(submit|valider|send|ok|confirm|envoyer|skip|passer|ignore)$/i.test(t)) return false;
-                        if (/\d+\s+questions?/i.test(t)) return false;
-                        if (headerEl && t === headerEl.innerText.trim()) return false;
-                        return true;
-                    });
-                
-                if (optionEls.length > 0) {
-                    const isMulti = !!questionContainer.querySelector('[role="checkbox"], input[type="checkbox"]');
-                    const options = optionEls.map((opt, idx) => {
+            const isConfirmedQuestion = !!(submitBtn && skipBtn);
+            if (questionContainer && (isConfirmedQuestion || !questionContainer.querySelector('[contenteditable="true"], [data-lexical-editor="true"]'))) {
+                // Header / question title
+                const headerEl = questionContainer.querySelector('.text-sm, h1, h2, h3, h4, p, .title, [class*="title"], [class*="question"]')
+                    || questionContainer.querySelector('span, div');
+
+                // Step progress / question counter (e.g. "1 of 2")
+                const counterSpan = Array.from(questionContainer.querySelectorAll('span, div')).find(el => /\b\d+\s+of\s+\d+\b/i.test((el.innerText || '').trim()));
+                const counterPrefix = counterSpan ? ('[' + counterSpan.innerText.trim() + '] ') : '';
+
+                // Detect multi-select
+                const isMulti = !!questionContainer.querySelector('[role="checkbox"], input[type="checkbox"]')
+                    || /multi-select/i.test(questionContainer.innerText);
+
+                // Find option labels or elements (excluding write-in)
+                const allLabels = Array.from(questionContainer.querySelectorAll('label'));
+                const optionLabels = allLabels.filter(lbl => {
+                    const forAttr = lbl.getAttribute('for') || lbl.getAttribute('htmlFor') || '';
+                    if (forAttr.includes('__write_in__')) return false;
+                    const text = (lbl.innerText || lbl.textContent || '').trim();
+                    if (!text || /^(submit|valider|send|continue|skip)/i.test(text)) return false;
+                    return true;
+                });
+
+                let options = [];
+                if (optionLabels.length > 0) {
+                    options = optionLabels.map((lbl, idx) => {
+                        const input = lbl.querySelector('input') || (lbl.getAttribute('for') ? questionContainer.querySelector('#' + lbl.getAttribute('for')) : null);
+                        const spans = Array.from(lbl.querySelectorAll('span'));
+                        let text = '';
+                        if (spans.length >= 2) {
+                            text = spans[spans.length - 1].innerText.trim();
+                        } else if (spans.length === 1) {
+                            text = spans[0].innerText.trim();
+                        } else {
+                            text = (lbl.innerText || lbl.textContent || '').trim();
+                        }
+                        text = text.replace(/^[A-Z]\s+/, '').trim();
+
+                        return {
+                            id: idx,
+                            optId: input?.value || String.fromCharCode(65 + idx),
+                            text: text || ('Option ' + (idx + 1)),
+                            checked: input ? input.checked : (lbl.getAttribute('aria-checked') === 'true' || lbl.classList.contains('bg-secondary'))
+                        };
+                    }).filter(o => o.text.length > 0);
+                } else {
+                    const optionEls = Array.from(questionContainer.querySelectorAll('[role="radio"], [role="checkbox"], input[type="radio"], input[type="checkbox"], [class*="option"], [class*="choice"], .cursor-pointer'))
+                        .filter(el => {
+                            const t = (el.innerText || el.textContent || '').trim();
+                            if (!t) return false;
+                            if (/^(submit|valider|send|ok|confirm|envoyer|skip|passer|ignore|continue)/i.test(t)) return false;
+                            if (/\d+\s+questions?/i.test(t)) return false;
+                            if (headerEl && t === headerEl.innerText.trim()) return false;
+                            if (el.tagName === 'BUTTON' && (el === submitBtn || el === skipBtn)) return false;
+                            return true;
+                        });
+                    options = optionEls.map((opt, idx) => {
                         const input = opt.tagName === 'INPUT' ? opt : opt.querySelector('input');
                         const text = (opt.innerText || opt.textContent || '').trim();
                         return {
@@ -2235,23 +2450,40 @@ export async function scanInteractivePrompts(cdp) {
                             checked: input ? input.checked : opt.getAttribute('aria-checked') === 'true'
                         };
                     }).filter(o => o.text.length > 0);
+                }
 
-                    const writeInInput = questionContainer.querySelector('input[type="text"], textarea');
-                    const targetSubmit = Array.from(questionContainer.querySelectorAll('button, [role="button"]'))
-                        .find(b => /submit|valider|send|ok|confirm|envoyer/i.test((b.innerText || b.getAttribute('aria-label') || '').trim())) || submitBtn;
-                    const skipBtn = allBtns.find(b => /^(skip|passer|ignore)$/i.test((b.innerText || b.getAttribute('aria-label') || '').trim()));
+                if (options.length > 0 || (submitBtn && skipBtn)) {
+                    const writeInInput = questionContainer.querySelector('input[type="text"], textarea')
+                        || questionContainer.querySelector('[id*="__write_in__"]');
 
-                    const promptKey = (headerEl?.innerText || 'question') + options.map(o => o.text).join('|');
+                    const targetSubmit = submitBtn || Array.from(questionContainer.querySelectorAll('button, [role="button"]'))
+                        .find(b => {
+                            if (b.getAttribute('data-testid') === 'interaction-continue-button') return true;
+                            return /submit|valider|send|ok|confirm|envoyer|continue/i.test((b.innerText || b.getAttribute('aria-label') || '').trim());
+                        });
+                    const targetSkip = skipBtn || allBtns.find(b => {
+                        if (b.getAttribute('data-testid') === 'interaction-skip-button') return true;
+                        return /^(skip|passer|ignore)$/i.test((b.innerText || b.getAttribute('aria-label') || '').trim());
+                    });
+
+                    const rawQuestionTitle = (headerEl?.innerText || 'Interactive Decision').trim();
+                    const cleanQuestionTitle = rawQuestionTitle.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ');
+                    const finalTitle = counterPrefix + cleanQuestionTitle;
+
+                    const promptKey = finalTitle + options.map(o => o.text).join('|');
+
+                    const rawSubmitText = targetSubmit ? (targetSubmit.innerText || targetSubmit.getAttribute('aria-label') || 'Submit').replace(/[↵\r\n]/g, '').trim() : 'Submit';
+                    const rawSkipText = targetSkip ? (targetSkip.innerText || targetSkip.getAttribute('aria-label') || 'Skip').trim() : 'Skip';
 
                     return {
                         id: 'question-' + simpleHash(promptKey),
                         type: 'question',
-                        title: (headerEl?.innerText || 'Interactive Decision').trim(),
+                        title: finalTitle,
                         isMultiSelect: isMulti,
                         options: options,
-                        hasWriteIn: !!writeInInput,
-                        submitText: targetSubmit ? (targetSubmit.innerText || 'Submit').trim() : 'Submit',
-                        skipText: skipBtn ? (skipBtn.innerText || 'Skip').trim() : null
+                        hasWriteIn: !!writeInInput || !!questionContainer.querySelector('label[for*="__write_in__"]'),
+                        submitText: rawSubmitText || 'Submit',
+                        skipText: rawSkipText || 'Skip'
                     };
                 }
             }
@@ -2327,7 +2559,7 @@ export async function scanInteractivePrompts(cdp) {
 
             return null;
         } catch (e) {
-            return null;
+            return { error: e.toString() };
         }
     })()`;
 
@@ -2340,6 +2572,10 @@ export async function scanInteractivePrompts(cdp) {
             });
             if (res.result?.value) {
                 const prompt = res.result.value;
+                if (prompt.error) {
+                    console.warn(`[scanInteractivePrompts] Script error in context ${ctx.id}:`, prompt.error);
+                    continue;
+                }
                 if (prompt.type === 'command') {
                     const heuristics = evaluateCommandHeuristics(prompt.command);
                     prompt.riskLevel = heuristics.riskLevel || 'warning';
@@ -2445,47 +2681,82 @@ export async function executeActionResponse(cdp, payload) {
 
             if ('${type}' === 'question') {
                 const isSkip = '${decision}' === 'skip';
+                const skipBtn = allBtns.find(b => {
+                    if (b.getAttribute('data-testid') === 'interaction-skip-button') return true;
+                    const text = (b.innerText || b.getAttribute('aria-label') || '').trim().toLowerCase();
+                    return /^(skip|passer|ignore)/i.test(text);
+                });
                 if (isSkip) {
-                    const skipBtn = allBtns.find(b => {
-                        const text = (b.innerText || b.getAttribute('aria-label') || '').trim().toLowerCase();
-                        return /^(skip|passer|ignore)$/i.test(text);
-                    });
                     if (skipBtn) {
                         skipBtn.click();
                         return { success: true, executed: 'skip' };
                     }
+                    return { error: 'Skip button not found' };
                 }
 
-                const questionCards = Array.from(document.querySelectorAll('.rounded-xl.border.border-border, [class*="rounded"][class*="border"]')).filter(c => {
-                    const h = c.querySelector('span');
-                    return h && /\d+\s+questions?/i.test(h.innerText) && !c.innerText.includes('(write-in)');
+                const submitBtn = allBtns.find(b => {
+                    if (b.getAttribute('data-testid') === 'interaction-continue-button') return true;
+                    const t = (b.innerText || b.getAttribute('aria-label') || '').trim();
+                    return /^(submit|valider|send|confirm|continue)/i.test(t) || /(?:submit|valider|send|confirm|continue)\s*[↵\n]/i.test(t);
                 });
-                const inlineCard = questionCards.length > 0 ? questionCards[questionCards.length - 1] : null;
 
-                const dialog = document.querySelector('[role="dialog"], .monaco-dialog-box, .dialog-box') ||
-                               document.querySelector('[data-testid="question-widget"]');
-                const root = inlineCard || (dialog && isVisible(dialog) ? dialog : null);
+                let root = null;
+                if (submitBtn && skipBtn) {
+                    root = submitBtn.closest('.outline-none.flex.flex-col, .outline-none, [class*="no-focus-ring"], [role="dialog"], [class*="modal"], [class*="dialog"], [class*="card"], div.fixed, div.absolute')
+                        || submitBtn.parentElement?.parentElement?.parentElement
+                        || submitBtn.parentElement?.parentElement
+                        || document.body;
+                } else {
+                    const questionCards = Array.from(document.querySelectorAll('.rounded-xl.border.border-border, [class*="rounded"][class*="border"]')).filter(c => {
+                        return /\d+\s+questions?/i.test(c.innerText);
+                    });
+                    const inlineCard = questionCards.length > 0 ? questionCards[questionCards.length - 1] : null;
+                    const dialog = document.querySelector('[role="dialog"], .monaco-dialog-box, .dialog-box') ||
+                                   document.querySelector('[data-testid="question-widget"]');
+                    root = inlineCard || (dialog && isVisible(dialog) ? dialog : (submitBtn ? submitBtn.parentElement?.parentElement : null));
+                }
                 if (!root) {
-                    return { error: 'No active question dialog or card found' };
+                    root = document.body;
                 }
 
                 const selectedIndices = ${JSON.stringify(selectedOptions || [])};
                 const writeIn = ${JSON.stringify(writeInText || '')};
 
-                const optionEls = Array.from(root.querySelectorAll('[role="radio"], [role="checkbox"], input[type="radio"], input[type="checkbox"], label, .cursor-pointer'))
-                    .filter(el => {
-                        const t = (el.innerText || el.textContent || '').trim();
-                        return t && !/^(submit|valider|send|skip|passer)/i.test(t) && !/\d+\s+questions?/i.test(t);
-                    });
-                
-                if (selectedIndices.length > 0 && optionEls.length > 0) {
+                // Find option labels excluding write-in
+                const allLabels = Array.from(root.querySelectorAll('label'));
+                const optionLabels = allLabels.filter(lbl => {
+                    const forAttr = lbl.getAttribute('for') || lbl.getAttribute('htmlFor') || '';
+                    if (forAttr.includes('__write_in__')) return false;
+                    const text = (lbl.innerText || lbl.textContent || '').trim();
+                    if (!text || /^(submit|valider|send|continue|skip)/i.test(text)) return false;
+                    return true;
+                });
+
+                if (selectedIndices.length > 0 && optionLabels.length > 0) {
                     selectedIndices.forEach(sel => {
-                        let targetOpt = null;
+                        let targetLabel = null;
                         if (typeof sel === 'number') {
-                            targetOpt = optionEls[sel];
+                            targetLabel = optionLabels[sel];
                         } else {
-                            targetOpt = optionEls.find(o => (o.innerText || o.textContent || '').toLowerCase().includes(String(sel).toLowerCase()));
+                            targetLabel = optionLabels.find(l => (l.innerText || l.textContent || '').toLowerCase().includes(String(sel).toLowerCase()));
                         }
+                        if (targetLabel) {
+                            const input = targetLabel.querySelector('input') || (targetLabel.getAttribute('for') ? root.querySelector('#' + targetLabel.getAttribute('for')) : null);
+                            if (input) {
+                                input.checked = true;
+                                input.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                            targetLabel.click();
+                        }
+                    });
+                } else if (selectedIndices.length > 0) {
+                    const optionEls = Array.from(root.querySelectorAll('[role="radio"], [role="checkbox"], input[type="radio"], input[type="checkbox"], .cursor-pointer'))
+                        .filter(el => {
+                            const t = (el.innerText || el.textContent || '').trim();
+                            return t && !/^(submit|valider|send|skip|passer|continue)/i.test(t) && !/\d+\s+questions?/i.test(t);
+                        });
+                    selectedIndices.forEach(sel => {
+                        let targetOpt = typeof sel === 'number' ? optionEls[sel] : optionEls.find(o => (o.innerText || o.textContent || '').toLowerCase().includes(String(sel).toLowerCase()));
                         if (targetOpt) {
                             const input = targetOpt.tagName === 'INPUT' ? targetOpt : targetOpt.querySelector('input');
                             if (input) {
@@ -2498,10 +2769,12 @@ export async function executeActionResponse(cdp, payload) {
                 }
 
                 if (writeIn) {
-                    const writeInput = root.querySelector('input[type="text"], textarea') || document.querySelector('input[type="text"], textarea');
+                    const writeInLabel = root.querySelector('label[for*="__write_in__"]');
+                    if (writeInLabel) writeInLabel.click();
+                    const writeInput = root.querySelector('textarea, input[type="text"]');
                     if (writeInput) {
                         writeInput.focus();
-                        const proto = window.HTMLInputElement.prototype;
+                        const proto = writeInput instanceof HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
                         const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
                         if (setter) {
                             setter.call(writeInput, writeIn);
@@ -2513,14 +2786,20 @@ export async function executeActionResponse(cdp, payload) {
                     }
                 }
 
-                const finalSubmit = targetSubmitBtn ||
-                    Array.from(root.querySelectorAll('button, [role="button"]')).find(b => /submit|valider|send|ok|confirm|envoyer/i.test((b.innerText || b.getAttribute('aria-label') || '').trim())) ||
-                    Array.from(document.querySelectorAll('button, [role="button"]')).find(b => /submit|valider|send|ok|confirm|envoyer/i.test((b.innerText || b.getAttribute('aria-label') || '').trim())) ||
-                    root.querySelector('button');
+                const finalSubmit = submitBtn ||
+                    Array.from(root.querySelectorAll('button, [role="button"]')).find(b => {
+                        if (b.getAttribute('data-testid') === 'interaction-continue-button') return true;
+                        return /^(submit|valider|send|ok|confirm|envoyer|continue)/i.test((b.innerText || b.getAttribute('aria-label') || '').trim());
+                    }) ||
+                    Array.from(document.querySelectorAll('button, [role="button"]')).find(b => {
+                        if (b.getAttribute('data-testid') === 'interaction-continue-button') return true;
+                        return /^(submit|valider|send|ok|confirm|envoyer|continue)/i.test((b.innerText || b.getAttribute('aria-label') || '').trim());
+                    });
                 
                 if (finalSubmit) {
                     finalSubmit.click();
-                    return { success: true, executed: 'submit' };
+                    const isContinue = (finalSubmit.innerText || '').toLowerCase().includes('continue');
+                    return { success: true, executed: isContinue ? 'continue' : 'submit' };
                 }
 
                 return { success: true, executed: 'options_applied' };
@@ -2696,6 +2975,7 @@ function broadcastCDPStatus(status) {
                     state.setCurrentPendingAction(detectedPrompt);
 
                     if (isNewPrompt) {
+                        console.log(`⚡ Action prompt broadcast: [${detectedPrompt.type}] ${detectedPrompt.title} (ID: ${detectedPrompt.id})`);
                         broadcast({
                             type: 'action_required',
                             action: detectedPrompt,
@@ -3601,6 +3881,8 @@ async function createServer() {
     });
 
     // Send message
+    // Protected by withSendLock serialization, 120s deduplication, and busy backoff
+    // Credit: Kelvin Tan (@kelverssg)
     app.post('/send', async (req, res) => {
         const { message } = req.body;
 
@@ -3612,7 +3894,61 @@ async function createServer() {
             return res.status(503).json({ error: 'CDP not connected' });
         }
 
-        const result = await injectMessage(cdpConnection, message);
+        const msgHash = sendHash(message);
+
+        const outcome = await withSendLock(async () => {
+            if (isRecentDuplicate(msgHash)) {
+                console.log(`[dedupe] suppressed duplicate /send within ${SEND_DEDUPE_MS / 1000}s (hash ${msgHash})`);
+                return { deduped: true };
+            }
+
+            // Inject message with busy backoff if the editor is currently working
+            let result;
+            for (let i = 0; ; i++) {
+                result = await injectMessage(cdpConnection, message, { checkBusy: true });
+                if (result.ok !== false || result.reason !== 'busy' || i >= SEND_BACKOFF_MS.length) break;
+                console.log(`[backoff] editor busy — retry ${i + 1}/${SEND_BACKOFF_MS.length} in ${SEND_BACKOFF_MS[i]}ms`);
+                await new Promise(r => setTimeout(r, SEND_BACKOFF_MS[i]));
+            }
+
+            // If still busy after backoffs, try once without checkBusy so it queues as normal
+            if (!result.ok && result.reason === 'busy') {
+                result = await injectMessage(cdpConnection, message, { checkBusy: false });
+            }
+
+            // Method 2 fallback check (if primary tab returned editor_not_found)
+            if (!result.ok && result.error === 'editor_not_found') {
+                console.log('[cdp] editor_not_found on primary tab — scanning all tabs (method 2)');
+                result = await injectMessageAnyTab(message);
+            }
+
+            // Only a successful transmission opens a deduplication window
+            if (result.ok !== false) {
+                recentSends.set(msgHash, Date.now());
+            }
+
+            return { result };
+        });
+
+        if (outcome.threw) {
+            const e = outcome.threw;
+            console.error(`[send] injection threw — answering 500 rather than hanging the caller: ${e?.stack || e}`);
+            return res.status(500).json({
+                success: false,
+                method: 'error',
+                details: { ok: false, error: String(e?.message || e), domStatus: 'attempted' }
+            });
+        }
+
+        if (outcome.deduped) {
+            return res.json({
+                success: true,
+                method: 'deduped',
+                details: { ok: true, deduped: true, reason: 'duplicate_suppressed', hash: msgHash }
+            });
+        }
+
+        const result = outcome.result;
         if (result.ok !== false) {
             sessionStats.increment('messagesSent');
             sessionStats.logAction('message_sent', {
