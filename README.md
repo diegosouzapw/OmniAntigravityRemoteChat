@@ -11,7 +11,7 @@
 <br/>
 <br/>
 
-![Version](https://img.shields.io/badge/version-1.3.1-6366f1) ![Node](https://img.shields.io/badge/node-22%2B-10b981) ![CI](https://github.com/diegosouzapw/OmniAntigravityRemoteChat/actions/workflows/ci.yml/badge.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
+![Version](https://img.shields.io/badge/version-1.4.0-6366f1) ![Node](https://img.shields.io/badge/node-22%2B-10b981) ![CI](https://github.com/diegosouzapw/OmniAntigravityRemoteChat/actions/workflows/ci.yml/badge.svg) ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
 
 [![npm](https://img.shields.io/npm/v/omni-antigravity-remote-chat?color=cc3534&logo=npm)](https://www.npmjs.com/package/omni-antigravity-remote-chat) [![npm downloads](https://img.shields.io/npm/dm/omni-antigravity-remote-chat?color=blue&logo=npm)](https://www.npmjs.com/package/omni-antigravity-remote-chat) [![Docker](https://img.shields.io/docker/pulls/diegosouzapw/omni-antigravity-remote-chat?color=2496ED&logo=docker&logoColor=white)](https://hub.docker.com/r/diegosouzapw/omni-antigravity-remote-chat)
 
@@ -127,6 +127,9 @@ antigravity . --remote-debugging-port=7800
 | 💬  | **Assist Workspace**   | Ask the supervisor for summaries, context and next actions               |
 | 🖼️  | **Timeline**           | Keep a persistent screenshot history with manual and automatic captures  |
 | 📱  | **Telegram Alerts**    | Get push notifications for Blocks, Task completion and Pending actions   |
+| ❓  | **Interactive Questions & Grill-Me** | Mirror, tap, and submit Antigravity question prompts with instant highlight and zero cycling |
+| ⚡  | **Lexical & Gemini Staging** | Full compatibility with Gemini-era Antigravity and input staging validation |
+| 🔒  | **Concurrency Lock & Dedupe** | Promise-chain send locking and SHA-256 deduplication protecting against race conditions |
 | 🎙️  | **Native Voice Memos** | Record audio on your phone and attach directly for Gemini multimodal processing |
 | 📋  | **Plan Review Drawer** | Review implementation plans, submit feedback, or approve with 1-tap from your phone |
 | 🖼️  | **Media Attachments**  | Upload screenshots and diagrams directly into the chat prompt from mobile |
